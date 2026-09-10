@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PULSO — Entrenador Personal</title>
+  <meta name="description" content="Gestiona clientes, rutinas, ejercicios, nutrición y progreso — todo guardado localmente en tu navegador.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="dark">
+
+<div class="app-layout">
+
+  <!-- ═══════════════ SIDEBAR ═══════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-icon">📈</span>
+      <span>PULSO</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-group-label">Principal</div>
+      <button class="nav-item active" data-tab="dashboard">🏠 Resumen</button>
+      <button class="nav-item" data-tab="clientes">🧑‍🤝‍🧑 Clientes</button>
+
+      <div class="nav-group-label">Entrenamiento</div>
+      <button class="nav-item" data-tab="ejercicios">📚 Ejercicios y tutoriales</button>
+      <button class="nav-item" data-tab="rutinas">🏋️ Rutinas</button>
+
+      <div class="nav-group-label">Seguimiento</div>
+      <button class="nav-item" data-tab="alimentacion">🍽️ Alimentación</button>
+      <button class="nav-item" data-tab="progreso">📊 Progreso</button>
+
+      <div class="nav-group-label">Configuración</div>
+      <button class="nav-item" data-tab="ajustes">⚙️ Ajustes</button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="btn-icon" id="dark-toggle-btn">
+        <span id="dark-icon">🌙</span> <span id="dark-label">Modo oscuro</span>
+      </button>
+      <div style="position:relative;">
+        <button class="btn-icon" id="backup-menu-btn" style="width:100%;">💾 Copia de seguridad</button>
+        <div id="backup-menu" class="backup-menu">
+          <div class="backup-menu-label">Respaldo rápido</div>
+          <button class="backup-menu-item" id="backup-export-quick">📄 Descargar datos (JSON)</button>
+          <div class="backup-menu-divider"></div>
+          <div class="backup-menu-label" style="opacity:.7;">Más opciones en Ajustes ⚙️</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════════════ MAIN ═══════════════ -->
+  <main class="main-area">
+    <header class="header">
+      <button class="btn-icon" id="btn-toggle-sidebar" title="Menú">☰</button>
+      <h1 class="header-title" id="page-title">Resumen</h1>
+
+      <div class="control-group-inline">
+        <span class="active-client-banner" id="active-client-banner"></span>
+        <select id="client-select-global" class="filter-select" title="Cliente activo"></select>
+        <button class="btn-icon" id="btn-new-client-header" title="Nuevo cliente">➕</button>
+      </div>
+    </header>
+
+    <div class="page-content" id="page-content"></div>
+  </main>
+</div>
+
+<!-- ═══════════════ MODAL GENÉRICO ═══════════════ -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal" id="modal">
+    <div class="modal-header">
+      <h3 id="modal-title"></h3>
+      <button class="btn-icon-sm" id="modal-cancel-x">✕</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer">
+      <button class="btn-secondary" id="modal-cancel">Cancelar</button>
+      <button class="btn-primary" id="modal-confirm">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-host" class="toast-host"></div>
+
+<script src="js/utils.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/state.js"></script>
+<script src="js/muscleMap.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/clients.js"></script>
+<script src="js/exercises.js"></script>
+<script src="js/routines.js"></script>
+<script src="js/nutrition.js"></script>
+<script src="js/progress.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
