@@ -11,6 +11,8 @@ const Storage = (() => {
     version: 1,
     settings: { darkMode: true, units: 'kg' },
     activeClientId: null,
+    lastBackupAt: null,        // ISO del último respaldo completo hecho
+    backupSnoozeUntil: null,   // ISO hasta cuándo se pospone el recordatorio
     clients: [],
     exercises: [],
     routines: [],
@@ -33,17 +35,42 @@ const Storage = (() => {
       db = EMPTY_DB();
     }
     if (!db.exercises.length) seedExercises();
+    // Migración: ejercicios guardados antes de estos campos no los traen.
+    db.exercises.forEach(ex => {
+      if (typeof ex.unilateral !== 'boolean') ex.unilateral = false;
+      if (typeof ex.trackPR !== 'boolean') ex.trackPR = true;
+    });
     save();
     return db;
   }
 
+  // Devuelve true si se guardó, false si falló (p. ej. cuota llena)
+  const WARN_CHARS = 4250000;   // ~85 % de los ~5 MB de localStorage
+  let warnedFull = false;
+
   function save() {
     try {
-      localStorage.setItem(DB_KEY, JSON.stringify(db));
+      const json = JSON.stringify(db);
+      localStorage.setItem(DB_KEY, json);
+      if (!warnedFull && json.length > WARN_CHARS) {
+        warnedFull = true;
+        Utils.toast('Almacenamiento casi lleno (>85 %). Ve a Ajustes → Optimizar fotos.', 'info');
+      }
+      return true;
     } catch (e) {
       console.error('No se pudo guardar en localStorage (¿cuota llena?)', e);
       Utils.toast('No se pudo guardar: almacenamiento local lleno', 'danger');
+      return false;
     }
+  }
+
+  // Sustituye toda la base por `next`. Si no se puede guardar, restaura la anterior.
+  function replaceAll(next) {
+    const prev = db;
+    db = next;
+    if (save()) return true;
+    db = prev;
+    return false;
   }
 
   function get() { return db; }
@@ -180,6 +207,6 @@ const Storage = (() => {
   return {
     load, save, get,
     all, find, insert, update, remove, removeWhere,
-    exportJSON, importJSON, resetAll
+    exportJSON, importJSON, resetAll, replaceAll
   };
 })();

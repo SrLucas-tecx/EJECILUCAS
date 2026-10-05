@@ -58,7 +58,7 @@ const Nutrition = (() => {
         <div id="nu-meals">${(log.meals || []).map((m, i) => mealBlock(m, i)).join('') || `<div class="empty-state"><span class="empty-icon">🍽️</span><h3>Sin comidas registradas</h3><p>Agrega el desayuno, comida, cena o snacks del día.</p></div>`}</div>
 
         <div class="section-header" style="margin-top:var(--space-5);"><h3 class="section-title" style="font-size:var(--fs-md)">Últimos 7 días</h3></div>
-        <div class="chart-card"><canvas id="nu-week-chart" height="90"></canvas></div>
+        <div class="chart-card"><div class="chart-canvas-box"><canvas id="nu-week-chart"></canvas></div></div>
       `;
 
       container.querySelector('#nu-date').addEventListener('change', e => { date = e.target.value; paint(); });
@@ -185,7 +185,7 @@ const Nutrition = (() => {
     const d0 = new Date(centerDate + 'T00:00:00');
     for (let i = 6; i >= 0; i--) {
       const d = new Date(d0); d.setDate(d0.getDate() - i);
-      days.push(d.toISOString().slice(0, 10));
+      days.push(Utils.toISODate(d));
     }
     const data = days.map(day => Math.round(totals(logOfDate(clientId, day)).kcal));
     if (canvas._chart) canvas._chart.destroy();

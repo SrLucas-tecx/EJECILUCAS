@@ -89,6 +89,7 @@ const UI = (() => {
     const recentWorkouts = Routines.logsOf(client.id).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
 
     container.innerHTML = `
+      ${Backup.reminderBanner()}
       <div class="hero-card hero-card-client">
         <div class="avatar avatar-lg">${Utils.initials(client.name)}</div>
         <div>
@@ -98,7 +99,7 @@ const UI = (() => {
       </div>
 
       <div class="stat-cards">
-        <div class="stat-card"><span>Peso actual</span><strong>${last ? last.weight + ' kg' : 'Sin registros'}</strong></div>
+        <div class="stat-card"><span>Peso actual</span><strong>${last ? Utils.toUnit(last.weight) + ' ' + Utils.unitLabel() : 'Sin registros'}</strong></div>
         <div class="stat-card"><span>Kcal hoy</span><strong>${kcalToday}${client.targetCalories ? ' / ' + client.targetCalories : ''}</strong></div>
         <div class="stat-card"><span>Rutinas activas</span><strong>${routines.length}</strong></div>
         <div class="stat-card"><span>Entrenamientos registrados</span><strong>${Routines.logsOf(client.id).length}</strong></div>
@@ -109,14 +110,16 @@ const UI = (() => {
           <h4>Últimos entrenamientos</h4>
           ${recentWorkouts.length ? `<ul class="simple-list">${recentWorkouts.map(w => {
             const vol = w.entries.reduce((s, e) => s + Utils.totalVolume(e.sets), 0);
-            return `<li><strong>${Utils.formatDate(w.date, { withYear: false })}</strong> — ${Utils.round(vol, 0)} kg de volumen</li>`;
+            return `<li><strong>${Utils.formatDate(w.date, { withYear: false })}</strong> — ${Utils.toUnit(vol)} ${Utils.unitLabel()} de volumen</li>`;
           }).join('')}</ul>` : `<p class="text-muted">Aún no hay entrenamientos registrados.</p>`}
         </div>
         <div class="chart-card">
           <h4>Evolución de peso</h4>
-          <canvas id="dash-weight-chart" height="110"></canvas>
+          <div class="chart-canvas-box"><canvas id="dash-weight-chart"></canvas></div>
         </div>
       </div>`;
+
+    Backup.wireReminder(container, () => renderDashboard(container));
 
     if (progressLogs.length) {
       const canvas = document.getElementById('dash-weight-chart');
@@ -124,7 +127,7 @@ const UI = (() => {
       canvas._chart = new Chart(canvas, {
         type: 'line',
         data: { labels: progressLogs.map(p => Utils.formatDate(p.date, { withYear: false, short: true })),
-          datasets: [{ data: progressLogs.map(p => p.weight), borderColor: '#5EEAD4', backgroundColor: 'rgba(94,234,212,.15)', fill: true, pointBackgroundColor: '#5EEAD4' }] },
+          datasets: [{ data: progressLogs.map(p => Utils.toUnit(p.weight)), borderColor: '#5EEAD4', backgroundColor: 'rgba(94,234,212,.15)', fill: true, pointBackgroundColor: '#5EEAD4' }] },
         options: Charts.lineOptions()
       });
     }
@@ -133,14 +136,16 @@ const UI = (() => {
   /* ---------------- Ajustes / respaldo ---------------- */
 
   function renderSettings(container) {
+    const usage = Photos.usage();
     container.innerHTML = `
       <div class="section-header"><h2 class="section-title">Ajustes y copia de seguridad</h2><p class="text-muted">Todo se guarda localmente en este navegador. Exporta seguido para no perder información.</p></div>
       <div class="settings-grid">
         <div class="settings-card">
           <h4>💾 Copia de seguridad</h4>
-          <p class="text-muted">Descarga todos tus datos (clientes, rutinas, nutrición, progreso) en un archivo JSON.</p>
-          <button class="btn-primary" id="st-export">📄 Exportar datos (JSON)</button>
-          <label class="btn-secondary" style="display:inline-flex;cursor:pointer;">📥 Importar datos
+          <p class="text-muted">Exporta o importa todo, o solo las secciones que elijas (clientes, rutinas, nutrición, progreso...).</p>
+          <p class="text-muted" style="margin:0; font-size:var(--fs-xs);">${Backup.lastBackupText()}</p>
+          <button class="btn-primary" id="st-export">📄 Exportar datos…</button>
+          <label class="btn-secondary" style="display:inline-flex;cursor:pointer;">📥 Importar datos…
             <input type="file" id="st-import" accept=".json" style="display:none">
           </label>
         </div>
@@ -155,34 +160,37 @@ const UI = (() => {
             </select></label>
         </div>
         <div class="settings-card">
+          <h4>🗄️ Almacenamiento</h4>
+          <div class="storage-bar"><div class="storage-bar-fill ${usage.pct >= 85 ? 'is-high' : ''}" style="width:${usage.pct}%"></div></div>
+          <p class="text-muted" style="margin:0;">Usando <strong>${Photos.formatSize(usage.total)}</strong> de ~5 MB (${usage.pct}%).
+            Fotos: <strong>${Photos.formatSize(usage.photoChars)}</strong> en ${usage.count} imagen${usage.count === 1 ? '' : 'es'}.</p>
+          <button class="btn-secondary" id="st-optimize">🗜️ Optimizar fotos guardadas</button>
+        </div>
+        <div class="settings-card">
           <h4>⚠️ Zona de riesgo</h4>
           <p class="text-muted">Borra toda la información guardada en este navegador. Esta acción no se puede deshacer.</p>
           <button class="btn-danger" id="st-reset">Borrar todos los datos</button>
         </div>
       </div>`;
 
-    container.querySelector('#st-export').addEventListener('click', () => {
-      Utils.download(`pulso-respaldo-${Utils.todayISO()}.json`, Storage.exportJSON());
-      Utils.toast('Respaldo descargado', 'success');
-    });
+    container.querySelector('#st-export').addEventListener('click', () => Backup.openExport(() => renderSettings(container)));
     container.querySelector('#st-import').addEventListener('change', e => {
       const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        try {
-          Storage.importJSON(ev.target.result);
-          Utils.toast('Datos importados correctamente', 'success');
-          bootstrapAfterDataChange();
-        } catch (err) {
-          Utils.toast('El archivo no es un respaldo válido', 'danger');
-        }
-      };
-      reader.readAsText(file);
+      e.target.value = ''; // permite volver a elegir el mismo archivo
+      Backup.startImport(file, bootstrapAfterDataChange);
+    });
+    container.querySelector('#st-optimize').addEventListener('click', async e => {
+      const btn = e.currentTarget;
+      btn.disabled = true;
+      const r = await Photos.optimizeStored((done, total) => { btn.textContent = `Optimizando ${done}/${total}…`; });
+      if (!r.processed) Utils.toast('No hay fotos pesadas que optimizar', 'info');
+      else Utils.toast(`Listo: ${Photos.formatSize(r.saved)} liberados${r.failed ? ` (${r.failed} no se pudieron procesar)` : ''}`, 'success');
+      renderSettings(container);
     });
     container.querySelector('#st-dark').addEventListener('change', e => setDarkMode(e.target.checked));
     container.querySelector('#st-units').addEventListener('change', e => {
       Storage.get().settings.units = e.target.value; Storage.save();
+      Utils.toast(`Unidad de peso cambiada a ${e.target.value === 'lb' ? 'libras' : 'kilogramos'}`, 'success');
     });
     container.querySelector('#st-reset').addEventListener('click', () => {
       confirm('Esto borrará TODOS los datos guardados en este navegador. ¿Continuar?', () => {
@@ -190,6 +198,35 @@ const UI = (() => {
         bootstrapAfterDataChange();
         Utils.toast('Datos reiniciados', 'info');
       });
+    });
+  }
+
+  /* ---------------- Glosario de términos ---------------- */
+
+  const GLOSSARY = [
+    ['Serie', 'Un bloque de repeticiones seguidas, sin descanso entre ellas. Una rutina suele pedir varias series por ejercicio.'],
+    ['Reps (repeticiones)', 'Cuántas veces haces el movimiento completo dentro de una serie. "8-12" es un rango objetivo: entre 8 y 12.'],
+    ['Obj. (objetivo)', 'Lo que se planea hacer en la rutina (reps obj., peso obj., RIR obj.). Lo que realmente hiciste se anota al registrar el entrenamiento.'],
+    ['Fallo técnico', 'El punto en que ya no puedes hacer otra repetición manteniendo la forma correcta. Todas las medidas de intensidad de la app se basan en este punto, no en el fallo absoluto.'],
+    ['RIR (repeticiones en reserva)', 'Cuántas repeticiones más habrías podido hacer antes del fallo técnico. RIR 0 = llegaste al fallo; RIR 2 = te sobraban 2 repeticiones.'],
+    ['RPE (esfuerzo percibido)', 'Qué tan duro fue, de 1 a 10. RPE 10 = fallo técnico. Se relaciona con el RIR así: RPE = 10 − RIR (RIR 2 ≈ RPE 8).'],
+    ['Serie efectiva', 'Una serie lo bastante intensa para estimular el músculo: RPE 7 o más, o RIR 3 o menos. La app las cuenta en el resumen de cada sesión.'],
+    ['1RM (repetición máxima)', 'El peso máximo que podrías levantar en una sola repetición. Como probarlo es cansado y riesgoso, la app lo estima con la fórmula de Epley: peso × (1 + reps ÷ 30).'],
+    ['PR (récord personal)', 'Tu mejor marca en un ejercicio. En la app, una serie es PR (🏆) cuando su 1RM estimado supera al de todas tus sesiones anteriores de ese ejercicio. Se puede desactivar por ejercicio.'],
+    ['Volumen', 'Peso × repeticiones, sumado de todas las series. Sirve para comparar cuánto trabajo total hiciste entre sesiones o meses.'],
+    ['Unilateral / Lado', 'Ejercicio que trabaja un lado del cuerpo a la vez (por ejemplo, curl con una mancuerna). "Izquierdo" y "Derecho" se registran por separado y cada lado tiene su propio PR; "Ambos" es una sola fila que representa los dos lados con el mismo peso y reps.'],
+    ['Peso corporal + extra', 'En ejercicios de "Peso corporal" (dominadas, fondos…) anotas solo el peso EXTRA que agregas (lastre, chaleco, mancuerna). Vacío o 0 = solo tu cuerpo. El volumen y el 1RM usan el total: peso corporal (del último registro de Progreso) + extra.'],
+    ['Anterior / Última vez', 'Lo que hiciste la última vez que entrenaste ese ejercicio, para que sepas qué peso y reps superar.'],
+    ['Sobrecarga progresiva (💡)', 'Ir aumentando poco a poco el peso, las reps o las series para seguir progresando. La app sugiere subir peso cuando completaste el tope del rango de reps en todas las series.'],
+    ['Kcal y macros', 'Kcal son las calorías. Los macros son proteína, carbohidratos y grasas, que se registran en gramos en la sección de Alimentación.']
+  ];
+
+  function openGlossary() {
+    openModal({
+      title: '❓ Glosario',
+      hideFooter: true,
+      body: `<dl class="glossary-list">${GLOSSARY.map(([t, d]) => `<dt>${Utils.escapeHtml(t)}</dt><dd>${Utils.escapeHtml(d)}</dd>`).join('')}</dl>
+        <p class="text-muted" style="font-size:var(--fs-xs); margin-top:var(--space-3);">Para la tabla RIR ↔ RPE, usa el botón "📏 Guía RIR/RPE" al registrar un entrenamiento.</p>`
     });
   }
 
@@ -284,6 +321,6 @@ const UI = (() => {
   return {
     TAB_TITLES, noClientMsg, switchTab, renderCurrentTab, refreshActiveClientBanner,
     renderDashboard, renderSettings, bootstrapAfterDataChange, setDarkMode,
-    openModal, closeModal, confirm, initModal
+    openModal, closeModal, confirm, initModal, openGlossary
   };
 })();

@@ -119,7 +119,7 @@ const Clients = (() => {
         ${isActive ? '<span class="badge badge-accent">Activo</span>' : ''}
       </div>
       <div class="client-card-stats">
-        <div><strong>${lastProgress ? lastProgress.weight + ' kg' : '—'}</strong><span>Último peso</span></div>
+        <div><strong>${lastProgress ? Utils.toUnit(lastProgress.weight) + ' ' + Utils.unitLabel() : '—'}</strong><span>Último peso</span></div>
         <div><strong>${Storage.all('routines').filter(r => r.clientId === c.id).length}</strong><span>Rutinas</span></div>
         <div><strong>${Utils.formatDate(c.startDate, { withYear: false })}</strong><span>Desde</span></div>
       </div>

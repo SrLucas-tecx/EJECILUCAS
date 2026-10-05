@@ -118,6 +118,14 @@ a{ color:var(--color-accent); }
   display:flex; align-items:center; gap:var(--space-3); padding:var(--space-3) var(--space-5);
   border-bottom:1px solid var(--color-border); background:var(--color-bg-elevated); flex-shrink:0; flex-wrap:wrap;
 }
+/* Solo es funcional bajo el breakpoint móvil (ver @media abajo), así que se oculta aquí
+   para no verse como un botón roto en pantallas de escritorio. */
+#btn-toggle-sidebar{ display:none; }
+
+/* Fondo oscuro para cerrar el menú lateral al tocar fuera de él, en móvil */
+.sidebar-backdrop{
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:40;
+}
 .header-title{ font-size:var(--fs-lg); flex:1; min-width:120px; }
 .control-group-inline{ display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; }
 .active-client-banner{ display:flex; align-items:center; gap:var(--space-2); font-size:var(--fs-sm); font-weight:600; }
@@ -175,6 +183,11 @@ textarea{ resize:vertical; width:100%; }
 .chart-grid{ display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); margin-top:var(--space-3); }
 .chart-card{ background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-4); }
 .chart-card h4{ font-size:var(--fs-sm); margin-bottom:var(--space-2); color:var(--color-text-muted); }
+/* Contenedor con altura FIJA: evita que Chart.js entre en bucle de crecimiento infinito
+   cuando maintainAspectRatio es false (bug reportado en la página de Progreso). */
+.chart-canvas-box{ position:relative; width:100%; height:240px; }
+.chart-canvas-box canvas{ position:absolute; inset:0; width:100% !important; height:100% !important; }
+.chart-canvas-box.chart-canvas-tall{ height:300px; }
 .simple-list li{ padding:var(--space-2) 0; border-bottom:1px dashed var(--color-border); font-size:var(--fs-sm); }
 .simple-list li:last-child{ border-bottom:none; }
 
@@ -212,27 +225,45 @@ textarea{ resize:vertical; width:100%; }
 .client-card-actions .btn-sm{ flex:1; }
 
 /* ---------------- Ejercicios ---------------- */
-.exercise-card{ background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:var(--space-4); display:flex; flex-direction:column; gap:6px; }
+.exercise-card{ background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:var(--space-4); display:flex; flex-direction:column; gap:6px; overflow:hidden; }
 .exercise-card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:var(--space-2); }
 .exercise-card-top h3{ font-size:var(--fs-sm); line-height:1.3; }
 .exercise-equipment{ font-size:var(--fs-xs); margin:0; }
 .exercise-card-actions{ display:flex; gap:6px; margin-top:var(--space-2); flex-wrap:wrap; }
 .video-embed{ position:relative; padding-top:56%; border-radius:var(--radius-md); overflow:hidden; }
 .video-embed iframe{ position:absolute; inset:0; width:100%; height:100%; border:0; }
+.exercise-thumb{ margin:calc(var(--space-4) * -1) calc(var(--space-4) * -1) 0; height:120px; overflow:hidden; background:var(--color-bg-elevated); }
+.exercise-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+.tutorial-media{ width:100%; max-height:280px; object-fit:cover; border-radius:var(--radius-md); margin-bottom:var(--space-2); }
+.media-preview{ margin-top:6px; position:relative; display:inline-block; }
+.media-preview img{ max-width:140px; max-height:100px; border-radius:var(--radius-sm); display:block; }
+.media-preview .btn-icon-sm{ position:absolute; top:-8px; right:-8px; background:var(--color-bg-elevated); }
 
 /* ---------------- Mapa muscular ---------------- */
-.mm-panel{ border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-3); background:var(--color-bg-card); }
+.mm-panel{ border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-3); background:var(--color-bg-card); position:relative; }
 .mm-wrap{ display:flex; flex-direction:column; align-items:center; gap:var(--space-2); }
+.mm-toolbar{ display:flex; align-items:center; justify-content:center; gap:var(--space-2); flex-wrap:wrap; width:100%; position:relative; }
 .mm-toggle{ display:flex; gap:4px; background:var(--color-bg-elevated); border-radius:var(--radius-pill); padding:3px; }
 .mm-view-btn{ background:none; border:none; padding:4px 14px; border-radius:var(--radius-pill); font-size:var(--fs-xs); font-weight:600; color:var(--color-text-muted); }
 .mm-view-btn.active{ background:var(--color-accent); color:#fff; }
-.mm-canvas{ position:relative; width:180px; }
-.mm-svg{ width:180px; }
-.mm-outline{ fill:none; stroke:var(--color-border); stroke-width:2; }
-.mm-zone{ fill:var(--color-text-muted); opacity:.22; stroke:transparent; cursor:pointer; transition:opacity .15s, fill .15s; }
-.mm-zone:hover{ opacity:.55; fill:var(--color-mint); }
-.mm-zone.is-selected{ opacity:.9; fill:var(--color-accent); }
+.mm-close-btn{ position:absolute; right:0; top:-4px; background:var(--color-bg-elevated); border:1px solid var(--color-border); color:var(--color-text-muted); width:26px; height:26px; border-radius:50%; font-size:.75rem; }
+.mm-close-btn:hover{ color:var(--color-danger); border-color:var(--color-danger); }
+.mm-canvas{ position:relative; height:320px; width:auto; margin:0 auto; }
+.mm-img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; pointer-events:none; user-select:none; }
+.mm-svg{ position:absolute; inset:0; width:100%; height:100%; }
+.mm-zone{ fill:#fff; opacity:.08; stroke:transparent; cursor:pointer; transition:opacity .15s, fill .15s; mix-blend-mode:normal; }
+.mm-zone:hover{ opacity:.42; fill:var(--color-mint); }
+.mm-zone.is-selected{ opacity:.72; fill:var(--color-accent); }
 .mm-legend{ display:flex; flex-wrap:wrap; gap:4px; justify-content:center; min-height:22px; }
+
+/* ---------------- Selector de músculo por campo (Brazo/Torso/Pierna) ---------------- */
+.mf-panel{ border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-3); background:var(--color-bg-card); }
+.mf-filter-panel{ border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-3); background:var(--color-bg-card); margin-bottom:var(--space-3); }
+.mf-picker{ display:flex; flex-direction:column; gap:var(--space-3); }
+.mf-group-label{ font-size:var(--fs-xs); font-weight:700; color:var(--color-text-muted); margin-bottom:6px; }
+.mf-group-items{ display:flex; flex-wrap:wrap; gap:6px; }
+.mf-chip{ background:var(--color-bg-elevated); border:1px solid var(--color-border); color:var(--color-text); padding:6px 12px; border-radius:var(--radius-pill); font-size:var(--fs-xs); font-weight:600; }
+.mf-chip.active{ background:var(--color-accent); border-color:transparent; color:#fff; }
 
 /* ---------------- Rutinas ---------------- */
 .routines-list{ display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:var(--space-3); }
@@ -245,6 +276,13 @@ textarea{ resize:vertical; width:100%; }
 .rt-day-tab.active{ background:var(--color-accent); color:#fff; border-color:transparent; }
 .rt-day-add{ background:none; border:1px dashed var(--color-border); color:var(--color-text-muted); padding:6px 14px; border-radius:var(--radius-pill); font-size:var(--fs-xs); }
 .rt-day-panel{ background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-3); margin-bottom:var(--space-3); }
+.rt-ex-list{ display:flex; flex-direction:column; gap:var(--space-2); margin-bottom:var(--space-3); }
+.rt-ex-block{ background:var(--color-bg-elevated); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-3); cursor:grab; transition:opacity .15s, border-color .15s; }
+.rt-ex-block.dragging{ opacity:.4; }
+.rt-ex-block.drag-over{ border-color:var(--color-accent); }
+.rt-ex-block-top{ display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.rt-ex-block-top h4{ flex:1; font-size:var(--fs-sm); }
+.drag-handle{ color:var(--color-text-muted); cursor:grab; font-size:.8rem; letter-spacing:-2px; }
 .field-inline{ display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; }
 .rt-day-name{ flex:1; font-weight:600; font-family:var(--font-display); }
 
@@ -256,6 +294,47 @@ textarea{ resize:vertical; width:100%; }
 .log-exercise{ border-top:1px solid var(--color-border); padding-top:var(--space-3); margin-top:var(--space-3); }
 .log-exercise h4{ font-size:var(--fs-sm); }
 .rm-cell{ color:var(--color-mint); font-weight:600; font-size:var(--fs-xs); }
+
+/* ---------------- Casillas dentro de formularios (unilateral, PR, etc.) ---------------- */
+.checkbox-field{ flex-direction:row !important; align-items:center; gap:8px !important; }
+.checkbox-field input[type=checkbox]{ width:16px; height:16px; accent-color:var(--color-accent); flex-shrink:0; }
+.checkbox-field span{ font-weight:500; color:var(--color-text); }
+
+/* Selector de lado (ejercicios unilaterales) dentro de tablas compactas */
+.table-compact select.rt-set-side, .table-compact select.log-set-side{ padding:4px 6px; font-size:var(--fs-xs); min-width:96px; }
+
+/* Constructor de rutina: columnas de ancho fijo para que la tabla (sobre todo con la
+   columna "Lado") nunca sea más ancha que el cuadro y no se salga el botón ✕. */
+.rt-ex-block .table-compact{ table-layout:fixed; }
+.rt-ex-block .table-compact th:first-child, .rt-ex-block .table-compact td:first-child{ width:40px; }
+.rt-ex-block .table-compact th:last-child, .rt-ex-block .table-compact td:last-child{ width:40px; }
+.rt-ex-block .table-compact .col-side{ width:118px; }
+.rt-ex-block .rt-set-input, .rt-ex-block select.rt-set-side{ width:100%; min-width:0; }
+/* Registro de entrenamiento: si hay muchas columnas, que la tabla haga scroll dentro de su bloque */
+.log-exercise{ overflow-x:auto; }
+
+/* Glosario */
+.glossary-list{ margin:0; }
+.glossary-list dt{ font-family:var(--font-display); font-weight:700; color:var(--color-accent); margin-top:var(--space-3); font-size:var(--fs-sm); }
+.glossary-list dt:first-child{ margin-top:0; }
+.glossary-list dd{ margin:2px 0 0; font-size:var(--fs-sm); line-height:1.5; }
+
+/* ---------------- Logger: última sesión, PR y sugerencia ---------------- */
+.log-ex-head{ display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); flex-wrap:wrap; }
+.log-prev-info{ font-size:var(--fs-xs); color:var(--color-text-muted); margin:4px 0 var(--space-2); }
+.log-suggest{ font-size:var(--fs-xs); font-weight:600; background:var(--color-mint-soft); color:var(--color-mint); border-radius:var(--radius-sm); padding:var(--space-2) var(--space-3); margin:0 0 var(--space-2); }
+.prev-cell{ color:var(--color-text-muted); font-size:var(--fs-xs); white-space:nowrap; }
+.pr-badge{ display:inline-block; background:var(--color-accent-soft); color:var(--color-accent); border-radius:var(--radius-pill); padding:1px 8px; font-size:.68rem; font-weight:700; margin-left:4px; }
+
+/* ---------------- Historial de entrenamientos ---------------- */
+.history-list{ display:flex; flex-direction:column; gap:var(--space-2); }
+.history-session{ background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-3); }
+.history-session-top{ display:flex; align-items:center; gap:var(--space-3); flex-wrap:wrap; }
+.history-session-date{ display:flex; align-items:center; gap:8px; }
+.history-session-stats{ font-size:var(--fs-xs); flex:1; }
+.history-session-actions{ display:flex; gap:4px; }
+.history-session-detail{ margin-top:var(--space-3); padding-top:var(--space-3); border-top:1px dashed var(--color-border); display:flex; flex-direction:column; gap:var(--space-3); }
+.history-ex strong{ font-size:var(--fs-sm); }
 
 /* ---------------- Nutrición ---------------- */
 .nutrition-summary{ display:grid; grid-template-columns:220px 1fr; gap:var(--space-4); background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:var(--space-4); }
@@ -277,6 +356,23 @@ textarea{ resize:vertical; width:100%; }
 .meal-items li{ font-size:var(--fs-sm); padding:2px 0; }
 
 /* ---------------- Progreso ---------------- */
+.before-after-card{ background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:var(--space-4); margin-top:var(--space-4); }
+.before-after-card h4{ font-size:var(--fs-sm); color:var(--color-text-muted); margin-bottom:var(--space-3); }
+.ba-grid{ display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); align-items:start; }
+.ba-slot{ text-align:center; }
+.ba-slot-label{ display:flex; align-items:center; justify-content:center; gap:6px; font-size:var(--fs-xs); font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--color-text-muted); margin-bottom:6px; }
+.ba-photo{ width:100%; aspect-ratio:3/4; border-radius:var(--radius-md); object-fit:cover; background:var(--color-bg-elevated); display:block; }
+.ba-photo-empty{ width:100%; aspect-ratio:3/4; border-radius:var(--radius-md); background:var(--color-bg-elevated); display:flex; align-items:center; justify-content:center; font-size:2rem; color:var(--color-text-muted); }
+.ba-locked-row{ display:flex; align-items:center; justify-content:center; gap:6px; margin-top:4px; }
+.ba-locked-badge{ display:inline-flex; align-items:center; gap:4px; font-size:.65rem; color:var(--color-text-muted); }
+.ba-locked-row .btn-icon-sm{ width:22px; height:22px; font-size:.7rem; }
+.ba-upload-label{ margin-top:6px; display:inline-block; cursor:pointer; }
+.ba-elapsed{ text-align:center; margin-top:var(--space-3); padding-top:var(--space-3); border-top:1px dashed var(--color-border); }
+.ba-elapsed strong{ font-family:var(--font-display); font-size:var(--fs-lg); color:var(--color-accent); display:block; }
+.ba-elapsed span{ font-size:var(--fs-xs); color:var(--color-text-muted); }
+
+.metric-controls{ display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; margin-bottom:var(--space-2); }
+
 .progress-timeline{ display:flex; flex-direction:column; gap:var(--space-2); }
 .progress-entry{ display:flex; gap:var(--space-3); background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-3); }
 .progress-photo{ width:64px; height:64px; border-radius:var(--radius-md); object-fit:cover; flex-shrink:0; }
@@ -288,6 +384,36 @@ textarea{ resize:vertical; width:100%; }
 .settings-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:var(--space-3); }
 .settings-card{ background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-lg); padding:var(--space-4); display:flex; flex-direction:column; gap:var(--space-3); align-items:flex-start; }
 .switch-row{ display:flex; align-items:center; justify-content:space-between; width:100%; font-size:var(--fs-sm); }
+
+/* ---------------- Respaldo por secciones (exportar / importar) ---------------- */
+.section-check-list, .mode-options{ display:flex; flex-direction:column; gap:6px; margin:var(--space-3) 0; }
+.section-check{
+  display:flex; align-items:center; gap:var(--space-3); cursor:pointer; font-size:var(--fs-sm);
+  background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-md);
+  padding:var(--space-2) var(--space-3); transition:border-color .15s;
+}
+.section-check:hover{ border-color:var(--color-accent); }
+.section-check > span{ flex:1; font-weight:600; }
+.section-check small{ color:var(--color-text-muted); font-size:var(--fs-xs); }
+.section-check input{ accent-color:var(--color-accent); width:16px; height:16px; flex-shrink:0; }
+.dep-warning{
+  margin-top:var(--space-3); padding:var(--space-2) var(--space-3); border-radius:var(--radius-sm);
+  background:rgba(251,191,36,.12); color:var(--color-warning); font-size:var(--fs-xs); line-height:1.5;
+}
+.dep-warning.danger{ background:rgba(240,85,92,.12); color:var(--color-danger); }
+
+/* ---------------- Recordatorio de respaldo (Resumen) ---------------- */
+.backup-reminder{
+  display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap;
+  background:rgba(251,191,36,.12); border:1px solid rgba(251,191,36,.35); color:var(--color-text);
+  border-radius:var(--radius-md); padding:var(--space-3) var(--space-4); margin-bottom:var(--space-4); font-size:var(--fs-sm);
+}
+.backup-reminder-actions{ display:flex; gap:var(--space-2); }
+
+/* ---------------- Almacenamiento (Ajustes) ---------------- */
+.storage-bar{ width:100%; height:10px; border-radius:var(--radius-pill); background:var(--color-bg-elevated); overflow:hidden; }
+.storage-bar-fill{ height:100%; border-radius:var(--radius-pill); background:var(--color-mint); transition:width .3s; }
+.storage-bar-fill.is-high{ background:var(--color-warning); }
 
 /* ---------------- Formularios genéricos (modales) ---------------- */
 .form-grid{ display:grid; grid-template-columns:1fr 1fr; gap:var(--space-3); }
@@ -327,11 +453,13 @@ body.modal-open{ overflow:hidden; }
 /* ---------------- Responsive ---------------- */
 @media (max-width: 860px){
   .app-layout{ grid-template-columns:1fr; }
+  #btn-toggle-sidebar{ display:flex; }
   .sidebar{
     position:fixed; inset:0 auto 0 0; width:240px; z-index:50; transform:translateX(-100%);
     transition:transform .2s;
   }
   .app-layout.sidebar-open .sidebar{ transform:translateX(0); box-shadow:var(--shadow-modal); }
+  .app-layout.sidebar-open .sidebar-backdrop{ display:block; }
   .dash-columns, .chart-grid{ grid-template-columns:1fr; }
   .nutrition-summary{ grid-template-columns:1fr; }
   .form-grid{ grid-template-columns:1fr; }

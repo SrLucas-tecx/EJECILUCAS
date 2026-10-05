@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="dark">
@@ -55,6 +57,8 @@
     </div>
   </aside>
 
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
   <!-- ═══════════════ MAIN ═══════════════ -->
   <main class="main-area">
     <header class="header">
@@ -64,6 +68,7 @@
       <div class="control-group-inline">
         <span class="active-client-banner" id="active-client-banner"></span>
         <select id="client-select-global" class="filter-select" title="Cliente activo"></select>
+        <button class="btn-icon" id="btn-glossary" title="Glosario: qué significan RIR, PR, RPE…">❓</button>
         <button class="btn-icon" id="btn-new-client-header" title="Nuevo cliente">➕</button>
       </div>
     </header>
@@ -91,6 +96,7 @@
 
 <script src="js/utils.js"></script>
 <script src="js/storage.js"></script>
+<script src="js/photos.js"></script>
 <script src="js/state.js"></script>
 <script src="js/muscleMap.js"></script>
 <script src="js/charts.js"></script>
@@ -99,6 +105,7 @@
 <script src="js/routines.js"></script>
 <script src="js/nutrition.js"></script>
 <script src="js/progress.js"></script>
+<script src="js/backup.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/app.js"></script>
 </body>

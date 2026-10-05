@@ -8,8 +8,15 @@ const Utils = (() => {
     return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   }
 
+  // Fecha LOCAL en formato YYYY-MM-DD.
+  // (toISOString() da la fecha en UTC: en zonas horarias al oeste de UTC, por la tarde/noche
+  //  devolvía el día siguiente.)
+  function toISODate(d = new Date()) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
   function todayISO() {
-    return new Date().toISOString().slice(0, 10);
+    return toISODate(new Date());
   }
 
   function formatDate(iso, opts = {}) {
@@ -64,14 +71,23 @@ const Utils = (() => {
     return round(weight * (1 + reps / 30), 1);
   }
 
-  // Volumen de una serie: peso × reps
-  function setVolume(weight, reps) {
-    return (Number(weight) || 0) * (Number(reps) || 0);
+  // Volumen de una serie: peso × reps. Una serie unilateral trabajó los dos lados
+  // (el peso registrado es por lado), así que su volumen cuenta doble.
+  function setVolume(weight, reps, unilateral) {
+    return (Number(weight) || 0) * (Number(reps) || 0) * (unilateral ? 2 : 1);
   }
 
-  // Volumen total de un conjunto de series [{weight,reps}]
+  // Volumen total de un conjunto de series [{weight,reps,unilateral}]
   function totalVolume(sets = []) {
-    return round(sets.reduce((sum, s) => sum + setVolume(s.weight, s.reps), 0), 1);
+    return round(sets.reduce((sum, s) => sum + setVolume(s.weight, s.reps, s.unilateral), 0), 1);
+  }
+
+  // Inversa de Epley: peso aproximado con el que podrías hacer `reps` repeticiones,
+  // dado un 1RM (estimado o real). Sirve para armar una tabla de PR aproximados.
+  function repMaxFromOneRM(oneRM, reps) {
+    if (!oneRM || !reps) return 0;
+    if (reps === 1) return round(oneRM, 1);
+    return round(oneRM / (1 + reps / 30), 1);
   }
 
   // Serie "efectiva" para hipertrofia: RPE >= 7 o RIR <= 3
@@ -97,6 +113,28 @@ const Utils = (() => {
     return clamp(10 - Number(rir), 1, 10);
   }
 
+  /* ---------------- Unidades (kg / lb) ----------------
+     Todo se guarda SIEMPRE en kilos internamente; estas funciones solo
+     convierten para mostrar en pantalla o para leer lo que el usuario
+     tecleó, según la preferencia guardada en Ajustes. */
+
+  function currentUnit() {
+    try { return Storage.get()?.settings?.units || 'kg'; } catch (e) { return 'kg'; }
+  }
+  function kgToLb(kg) { return kg * 2.20462; }
+  function lbToKg(lb) { return lb / 2.20462; }
+  // kg guardado -> valor a mostrar en el input/etiqueta, en la unidad activa
+  function toUnit(kg) {
+    if (kg === '' || kg == null || isNaN(kg)) return '';
+    return currentUnit() === 'lb' ? round(kgToLb(Number(kg)), 1) : round(Number(kg), 1);
+  }
+  // valor tecleado por el usuario (en la unidad activa) -> kg para guardar
+  function fromUnit(val) {
+    if (val === '' || val == null || isNaN(val)) return '';
+    return currentUnit() === 'lb' ? round(lbToKg(Number(val)), 2) : round(Number(val), 2);
+  }
+  function unitLabel() { return currentUnit(); }
+
   function escapeHtml(str = '') {
     return String(str)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -109,6 +147,18 @@ const Utils = (() => {
       clearTimeout(t);
       t = setTimeout(() => fn(...args), wait);
     };
+  }
+
+  // Exporta a un .xlsx real (columnas nativas de Excel, no CSV separado por comas).
+  // sheets = { 'Nombre de hoja': [ {col1: val, col2: val}, ... ] }
+  function exportExcel(filename, sheets) {
+    if (!window.XLSX) { toast('No se pudo cargar el generador de Excel (revisa tu conexión a internet)', 'danger'); return; }
+    const wb = XLSX.utils.book_new();
+    Object.entries(sheets).forEach(([name, rows]) => {
+      const ws = XLSX.utils.json_to_sheet(rows && rows.length ? rows : [{ Info: 'Sin datos todavía' }]);
+      XLSX.utils.book_append_sheet(wb, ws, name.slice(0, 31));
+    });
+    XLSX.writeFile(wb, filename);
   }
 
   function download(filename, content, mime = 'application/json') {
@@ -135,8 +185,9 @@ const Utils = (() => {
   }
 
   return {
-    uid, todayISO, formatDate, monthLabel, monthKey, age, initials, clamp, round,
-    estimate1RM, setVolume, totalVolume, isEffectiveSet, effectiveSets, density, rirToRpe,
-    escapeHtml, debounce, download, toast
+    uid, toISODate, todayISO, formatDate, monthLabel, monthKey, age, initials, clamp, round,
+    estimate1RM, repMaxFromOneRM, setVolume, totalVolume, isEffectiveSet, effectiveSets, density, rirToRpe,
+    currentUnit, kgToLb, lbToKg, toUnit, fromUnit, unitLabel,
+    escapeHtml, debounce, download, exportExcel, toast
   };
 })();

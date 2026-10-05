@@ -20,10 +20,14 @@ document.addEventListener('DOMContentLoaded', () => {
     Clients.switchClient(e.target.value);
   });
   document.getElementById('btn-new-client-header').addEventListener('click', () => Clients.createClient());
+  document.getElementById('btn-glossary').addEventListener('click', () => UI.openGlossary());
 
   // Botón hamburguesa (móvil)
   document.getElementById('btn-toggle-sidebar').addEventListener('click', () => {
     document.querySelector('.app-layout').classList.toggle('sidebar-open');
+  });
+  document.getElementById('sidebar-backdrop').addEventListener('click', () => {
+    document.querySelector('.app-layout').classList.remove('sidebar-open');
   });
 
   // Menú de respaldo rápido desde el pie del sidebar
@@ -33,6 +37,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', () => backupMenu.classList.remove('open'));
   document.getElementById('backup-export-quick').addEventListener('click', () => {
     Utils.download(`pulso-respaldo-${Utils.todayISO()}.json`, Storage.exportJSON());
+    Backup.markDone();
+    UI.renderCurrentTab();
     Utils.toast('Respaldo descargado', 'success');
   });
   document.getElementById('dark-toggle-btn').addEventListener('click', () => {
