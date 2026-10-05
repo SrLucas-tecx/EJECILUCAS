@@ -1,7 +1,8 @@
 /* ==========================================================================
    ROUTINES — constructor de rutinas por cliente + registro de entrenamientos
    Calcula volumen total, series efectivas y 1RM estimado (fórmula de Epley)
-   Los pesos se guardan SIEMPRE en kg; se muestran en kg o lb según Ajustes.
+   Los pesos se guardan SIEMPRE en kg; el editor permite unidad por rutina
+   para objetivos y el resto se muestra según Ajustes.
    ========================================================================== */
 
 const Routines = (() => {
@@ -11,6 +12,16 @@ const Routines = (() => {
   function all(clientId) { return Storage.all('routines').filter(r => r.clientId === clientId); }
   function get(id) { return Storage.find('routines', id); }
   function logsOf(clientId) { return Storage.all('workoutLogs').filter(l => l.clientId === clientId); }
+
+  function targetWeightToUnit(kg, unit) {
+    if (kg === '' || kg == null || isNaN(kg)) return '';
+    return Utils.round(unit === 'lb' ? Utils.kgToLb(Number(kg)) : Number(kg), 1);
+  }
+
+  function targetWeightFromUnit(value, unit) {
+    if (value === '' || value == null || isNaN(value)) return '';
+    return unit === 'lb' ? Utils.round(Utils.lbToKg(Number(value)), 2) : Utils.round(Number(value), 2);
+  }
 
   function copyRoutine(id, container) {
     const routine = get(id);
@@ -306,7 +317,7 @@ const Routines = (() => {
     const jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
     if (!jsPDFCtor) { Utils.toast('No se pudo cargar el generador de PDF (revisa tu conexión a internet)', 'danger'); return; }
     const client = Storage.find('clients', routine.clientId);
-    const unit = Utils.unitLabel();
+    const unit = ['kg', 'lb'].includes(routine.targetWeightUnit) ? routine.targetWeightUnit : Utils.currentUnit();
     const doc = new jsPDFCtor({ unit: 'mm', format: 'a4', orientation: 'portrait' });
 
     const margin = 15, pageW = 210, pageH = 297;
@@ -358,7 +369,7 @@ const Routines = (() => {
         const sets = normalizeTargetSets(ex);
         const sideLabel = { izq: 'Izq.', der: 'Der.', ambos: 'Ambos' };
         const pesoLabel = bwEx ? `Extra obj. (${unit})` : `Peso obj. (${unit})`;
-        const pesoVal = w => w ? (bwEx ? '+' : '') + Utils.toUnit(w) : (bwEx ? 'Peso corporal' : '—');
+        const pesoVal = w => w ? (bwEx ? '+' : '') + targetWeightToUnit(w, unit) : (bwEx ? 'Peso corporal' : '—');
 
         ensureSpace(10);
         doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(20);
@@ -412,12 +423,17 @@ const Routines = (() => {
     const client = State.getActiveClient();
     const editing = routineId ? get(routineId) : null;
     const draft = editing ? JSON.parse(JSON.stringify(editing)) : { clientId: client.id, name: '', notes: '', days: [newDay('Día 1')] };
-    const builderState = { activeDayIndex: 0, copiedExercises: null };
+    const savedWeightUnit = editing?.targetWeightUnit;
+    const builderState = {
+      activeDayIndex: 0,
+      copiedExercises: null,
+      weightUnit: ['kg', 'lb'].includes(savedWeightUnit) ? savedWeightUnit : Utils.currentUnit()
+    };
 
     const bodyHost = document.createElement('div');
     const paint = (dayIndex = builderState.activeDayIndex) => {
       builderState.activeDayIndex = Math.max(0, Math.min(dayIndex, draft.days.length - 1));
-      bodyHost.innerHTML = builderMarkup(draft, builderState.activeDayIndex, builderState.copiedExercises !== null);
+      bodyHost.innerHTML = builderMarkup(draft, builderState.activeDayIndex, builderState.copiedExercises !== null, builderState.weightUnit);
       wireBuilder(bodyHost, draft, paint, builderState);
     };
 
@@ -431,6 +447,7 @@ const Routines = (() => {
         if (!name) { Utils.toast('Ponle nombre a la rutina', 'danger'); return false; }
         draft.name = name;
         draft.notes = bodyHost.querySelector('#rt-notes').value.trim();
+        draft.targetWeightUnit = builderState.weightUnit;
         if (!draft.days.some(d => d.exercises.length)) { Utils.toast('Agrega al menos un ejercicio', 'danger'); return false; }
         if (editing) Storage.update('routines', editing.id, draft);
         else Storage.insert('routines', draft);
@@ -441,23 +458,29 @@ const Routines = (() => {
     });
   }
 
-  function builderMarkup(draft, activeDayIndex, hasCopiedExercises) {
+  function builderMarkup(draft, activeDayIndex, hasCopiedExercises, weightUnit) {
     return `
       <div style="text-align:right; margin-bottom:var(--space-2);"><button type="button" class="btn-sm btn-secondary" id="rt-glossary">❓ Glosario (RIR, PR, RPE…)</button></div>
       <label class="field field-wide"><span>Nombre de la rutina</span>
         <input type="text" id="rt-name" value="${Utils.escapeHtml(draft.name)}" placeholder="Ej. Fuerza 4 días - Ana"></label>
       <label class="field field-wide"><span>Anotaciones (opcional)</span>
         <textarea id="rt-notes" rows="2" placeholder="Notas para esta rutina: progresiones, lesiones a cuidar, etc.">${Utils.escapeHtml(draft.notes || '')}</textarea></label>
+      <label class="field"><span>Unidad del peso objetivo</span>
+        <select id="rt-weight-unit">
+          <option value="kg" ${weightUnit === 'kg' ? 'selected' : ''}>Kilogramos (kg)</option>
+          <option value="lb" ${weightUnit === 'lb' ? 'selected' : ''}>Libras (lb)</option>
+        </select>
+      </label>
       <div class="rt-days-tabs" id="rt-days-tabs">
         ${draft.days.map((d, i) => `<button type="button" class="rt-day-tab ${i === 0 ? 'active' : ''}" data-i="${i}">${Utils.escapeHtml(d.name)}</button>`).join('')}
         <button type="button" class="rt-day-add" id="rt-day-add">+ Día</button>
       </div>
       <div id="rt-day-panels">
-        ${draft.days.map((d, i) => dayPanel(d, i, activeDayIndex, hasCopiedExercises)).join('')}
+        ${draft.days.map((d, i) => dayPanel(d, i, activeDayIndex, hasCopiedExercises, weightUnit)).join('')}
       </div>`;
   }
 
-  function dayPanel(day, i, activeDayIndex, hasCopiedExercises) {
+  function dayPanel(day, i, activeDayIndex, hasCopiedExercises, weightUnit) {
     return `
     <div class="rt-day-panel" data-i="${i}" style="display:${i === activeDayIndex ? '' : 'none'}">
       <div class="field-inline">
@@ -469,7 +492,7 @@ const Routines = (() => {
         <button type="button" class="btn-sm btn-secondary rt-day-paste" data-i="${i}" ${hasCopiedExercises ? '' : 'disabled'}>📥 Pegar ejercicios</button>
       </div>
       <div class="rt-ex-list" data-i="${i}">
-        ${day.exercises.map((ex, j) => exerciseBlock(ex, i, j)).join('') || `<p class="text-muted" style="font-size:var(--fs-sm)">Sin ejercicios en este día todavía.</p>`}
+        ${day.exercises.map((ex, j) => exerciseBlock(ex, i, j, weightUnit)).join('') || `<p class="text-muted" style="font-size:var(--fs-sm)">Sin ejercicios en este día todavía.</p>`}
       </div>
       <button type="button" class="btn-sm btn-secondary rt-add-ex" data-i="${i}">+ Agregar ejercicio</button>
     </div>`;
@@ -483,13 +506,13 @@ const Routines = (() => {
     </select>`;
   }
 
-  function exerciseBlock(ex, dayI, exI) {
+  function exerciseBlock(ex, dayI, exI, weightUnit) {
     const meta = Exercises.get(ex.exerciseId);
     const uni = !!meta?.unilateral;
     const bwEx = Exercises.isBodyweight(meta);
     const timed = !!meta?.measureByTime;
     const sets = normalizeTargetSets(ex);
-    const unit = Utils.unitLabel();
+    const unit = weightUnit;
     return `
     <div class="rt-ex-block" draggable="true" data-i="${dayI}" data-j="${exI}">
       <div class="rt-ex-block-top">
@@ -505,7 +528,7 @@ const Routines = (() => {
               <td>${k + 1}</td>
               ${uni ? `<td class="col-side">${sideSelect('rt-set-side', `data-i="${dayI}" data-j="${exI}" data-k="${k}"`, sideOf(s))}</td>` : ''}
               <td><input type="${timed ? 'number' : 'text'}" min="${timed ? '0' : ''}" class="rt-set-input" data-f="${timed ? 'time' : 'reps'}" value="${Utils.escapeHtml(String(timed ? s.time ?? '' : s.reps ?? ''))}" placeholder="${timed ? '30' : '8-12'}"></td>
-              <td><input type="number" min="0" step="0.5" class="rt-set-input" data-f="weight" ${bwEx ? 'placeholder="0 = solo peso corporal"' : ''} value="${Utils.toUnit(s.weight)}"></td>
+              <td><input type="number" min="0" step="0.5" class="rt-set-input" data-f="weight" ${bwEx ? 'placeholder="0 = solo peso corporal"' : ''} value="${targetWeightToUnit(s.weight, weightUnit)}"></td>
               <td><input type="number" min="0" max="10" class="rt-set-input" data-f="rir" value="${s.rir ?? ''}"></td>
               <td><button type="button" class="btn-icon-sm rt-set-remove" data-i="${dayI}" data-j="${exI}" data-k="${k}" title="Eliminar serie">✕</button></td>
             </tr>`).join('') || `<tr><td colspan="${uni ? 6 : 5}" class="text-muted">Sin series</td></tr>`}
@@ -519,6 +542,10 @@ const Routines = (() => {
     host.querySelector('#rt-glossary').addEventListener('click', () => UI.openGlossary());
     host.querySelector('#rt-name').addEventListener('input', e => { draft.name = e.target.value; });
     host.querySelector('#rt-notes').addEventListener('input', e => { draft.notes = e.target.value; });
+    host.querySelector('#rt-weight-unit').addEventListener('change', e => {
+      builderState.weightUnit = e.target.value;
+      paint();
+    });
 
     host.querySelectorAll('.rt-day-tab').forEach(tab => tab.addEventListener('click', () => {
       host.querySelectorAll('.rt-day-tab').forEach(t => t.classList.remove('active'));
@@ -608,7 +635,7 @@ const Routines = (() => {
       const ex = draft.days[i].exercises[j];
       if (!Array.isArray(ex.targetSets)) ex.targetSets = normalizeTargetSets(ex);
       ex.targetSets[k][f] = f === 'weight'
-        ? (e.target.value === '' ? '' : Utils.fromUnit(e.target.value))
+        ? targetWeightFromUnit(e.target.value, builderState.weightUnit)
         : e.target.value;
     }));
 
