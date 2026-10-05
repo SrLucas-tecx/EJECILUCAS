@@ -6,9 +6,34 @@
 
 const Routines = (() => {
 
+  let copiedRoutine = null;
+
   function all(clientId) { return Storage.all('routines').filter(r => r.clientId === clientId); }
   function get(id) { return Storage.find('routines', id); }
   function logsOf(clientId) { return Storage.all('workoutLogs').filter(l => l.clientId === clientId); }
+
+  function copyRoutine(id, container) {
+    const routine = get(id);
+    if (!routine) return;
+    copiedRoutine = JSON.parse(JSON.stringify(routine));
+    Utils.toast(`Rutina "${routine.name}" copiada. Cambia al cliente destino y pégala.`, 'success');
+    renderPage(container);
+  }
+
+  function pasteRoutine(container) {
+    const client = State.getActiveClient();
+    if (!copiedRoutine || !client) return;
+
+    const routine = JSON.parse(JSON.stringify(copiedRoutine));
+    delete routine.id;
+    delete routine.createdAt;
+    delete routine.updatedAt;
+    routine.clientId = client.id;
+    routine.days.forEach(day => { day.id = Utils.uid('day'); });
+    Storage.insert('routines', routine);
+    Utils.toast(`Rutina "${routine.name}" pegada para ${client.name}`, 'success');
+    renderPage(container);
+  }
 
   function newDay(name) {
     return { id: Utils.uid('day'), name: name || `Día ${1}`, exercises: [] };
@@ -194,11 +219,16 @@ const Routines = (() => {
       <div class="section-header" style="justify-content:space-between;">
         <div><h2 class="section-title">Rutinas de ${Utils.escapeHtml(client.name)}</h2>
         <p class="text-muted">Crea rutinas por día, asigna ejercicios y registra el entrenamiento real.</p></div>
-        <button class="btn-primary" id="rt-new">+ Nueva rutina</button>
+        <div class="client-card-actions">
+          ${copiedRoutine ? '<button class="btn-sm btn-secondary" id="rt-paste">📥 Pegar rutina copiada</button>' : ''}
+          <button class="btn-primary" id="rt-new">+ Nueva rutina</button>
+        </div>
       </div>
       <div class="routines-list" id="rt-list"></div>`;
 
     container.querySelector('#rt-new').addEventListener('click', () => openBuilder(null, () => renderPage(container)));
+    const pasteButton = container.querySelector('#rt-paste');
+    if (pasteButton) pasteButton.addEventListener('click', () => pasteRoutine(container));
     const list = container.querySelector('#rt-list');
     list.innerHTML = routines.length ? routines.map(routineCard).join('')
       : `<div class="empty-state"><span class="empty-icon">📋</span><h3>Sin rutinas todavía</h3><p>Crea la primera rutina para ${Utils.escapeHtml(client.name)}.</p></div>`;
@@ -206,6 +236,7 @@ const Routines = (() => {
     list.querySelectorAll('.routine-card').forEach(card => {
       const id = card.dataset.id;
       card.querySelector('[data-act="edit"]').addEventListener('click', () => openBuilder(id, () => renderPage(container)));
+      card.querySelector('[data-act="copy"]').addEventListener('click', () => copyRoutine(id, container));
       card.querySelector('[data-act="log"]').addEventListener('click', () => openLogger(id, () => renderPage(container)));
       card.querySelector('[data-act="history"]').addEventListener('click', () => openHistory(id, () => renderPage(container)));
       card.querySelector('[data-act="pdf"]').addEventListener('click', () => exportPDF(get(id)));
@@ -231,6 +262,7 @@ const Routines = (() => {
       ${r.notes ? `<p class="text-muted" style="font-size:var(--fs-xs); margin:0 0 var(--space-2);">📝 ${Utils.escapeHtml(r.notes)}</p>` : ''}
       <div class="client-card-actions">
         <button class="btn-sm btn-secondary" data-act="edit">✏️ Editar</button>
+        <button class="btn-sm btn-secondary" data-act="copy">📋 Copiar rutina</button>
         <button class="btn-sm btn-primary" data-act="log">🏋️ Registrar entrenamiento</button>
         <button class="btn-sm btn-secondary" data-act="history">📜 Historial</button>
         <button class="btn-sm btn-secondary" data-act="pdf">📄 PDF</button>
