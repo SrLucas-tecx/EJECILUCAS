@@ -36,7 +36,8 @@ const Exercises = (() => {
     const primary = ex.muscles.map(m => `<span class="chip chip-accent">${MuscleMap.muscleLabel(m)}</span>`).join('');
     const secondary = (ex.secondary || []).map(m => `<span class="chip">${MuscleMap.muscleLabel(m)}</span>`).join('');
     const uni = ex.unilateral ? `<span class="chip">🔁 Unilateral</span>` : '';
-    return primary + secondary + uni;
+    const timed = ex.measureByTime ? '<span class="chip">⏱️ Por tiempo</span>' : '';
+    return primary + secondary + uni + timed;
   }
 
   function card(ex, opts = {}) {
@@ -88,7 +89,7 @@ const Exercises = (() => {
         const pick = elCard.querySelector('[data-act="pick"]');
         if (pick) pick.addEventListener('click', () => opts.onPick && opts.onPick(id));
         const edit = elCard.querySelector('[data-act="edit"]');
-        if (edit) edit.addEventListener('click', () => openModal(id));
+        if (edit) edit.addEventListener('click', () => openModal(id, paintGrid));
         const del = elCard.querySelector('[data-act="delete"]');
         if (del) del.addEventListener('click', () => deleteExercise(id, paintGrid));
       });
@@ -130,7 +131,7 @@ const Exercises = (() => {
     const ex = get(id);
     if (!ex) return;
     const client = State.getActiveClient();
-    const best = (ex.trackPR !== false && client) ? Routines.bestSetEver(client.id, ex.id) : null;
+    const best = (!ex.measureByTime && ex.trackPR !== false && client) ? Routines.bestSetEver(client.id, ex.id) : null;
     UI.openModal({
       title: ex.name,
       body: `
@@ -141,7 +142,7 @@ const Exercises = (() => {
         <p>${Utils.escapeHtml(ex.description || 'Sin descripción todavía.')}</p>
         ${ex.tips ? `<h4>Consejo del entrenador</h4><p>${Utils.escapeHtml(ex.tips)}</p>` : ''}
         ${ex.videoUrl ? `<h4>Video</h4><div class="video-embed"><iframe src="${Utils.escapeHtml(toEmbed(ex.videoUrl))}" allowfullscreen loading="lazy"></iframe></div>` : ''}
-        ${ex.trackPR === false ? `<p class="text-muted" style="font-size:var(--fs-xs);">📴 El seguimiento de récords (PR) está desactivado para este ejercicio.</p>` : `
+        ${ex.measureByTime ? `<p class="text-muted" style="font-size:var(--fs-xs);">⏱️ Este ejercicio se registra por duración en segundos.</p>` : ex.trackPR === false ? `<p class="text-muted" style="font-size:var(--fs-xs);">📴 El seguimiento de récords (PR) está desactivado para este ejercicio.</p>` : `
         <h4>📐 Récord (PR)</h4>
         <p class="text-muted" style="font-size:var(--fs-sm);">${best
           ? `Tu mejor registro con ${Utils.escapeHtml(client.name)}: <strong>${Utils.toUnit(best.weight)} ${Utils.unitLabel()} × ${best.reps}</strong> (1RM est. ${Utils.toUnit(best.rm)} ${Utils.unitLabel()}, ${Utils.formatDate(best.date, { withYear: false })})`
@@ -214,6 +215,7 @@ const Exercises = (() => {
         <label class="field"><span>Dificultad</span>
           <select id="f-difficulty">${Object.entries(DIFFICULTY).map(([k, v]) => `<option value="${k}" ${editing?.difficulty === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         <label class="field checkbox-field"><input type="checkbox" id="f-unilateral" ${editing?.unilateral ? 'checked' : ''}><span>Ejercicio unilateral (un lado a la vez)</span></label>
+        <label class="field checkbox-field"><input type="checkbox" id="f-measure-time" ${editing?.measureByTime ? 'checked' : ''}><span>Medir este ejercicio por tiempo (segundos) en vez de repeticiones</span></label>
         <label class="field checkbox-field"><input type="checkbox" id="f-trackpr" ${editing?.trackPR === false ? '' : 'checked'}><span>Registrar récords (PR) para este ejercicio</span></label>
         <label class="field"><span>Video (URL de YouTube, opcional)</span>
           <input type="url" id="f-video" value="${editing ? Utils.escapeHtml(editing.videoUrl || '') : ''}" placeholder="https://youtube.com/..."></label>
@@ -248,6 +250,7 @@ const Exercises = (() => {
           equipment: document.getElementById('f-equipment').value,
           difficulty: document.getElementById('f-difficulty').value,
           unilateral: document.getElementById('f-unilateral').checked,
+          measureByTime: document.getElementById('f-measure-time').checked,
           trackPR: document.getElementById('f-trackpr').checked,
           videoUrl: document.getElementById('f-video').value.trim(),
           description: document.getElementById('f-desc').value.trim(),

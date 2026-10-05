@@ -208,6 +208,14 @@ const Backup = (() => {
     return JSON.stringify(out, null, 2);
   }
 
+  function exportSection(key) {
+    if (!SECTIONS[key]) throw new Error('La categoría seleccionada no es válida');
+    const filename = SECTIONS[key].label.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    Utils.download(`ejercilucas-${filename}-${Utils.todayISO()}.json`, buildExport([key]));
+    Utils.toast(`Respaldo de ${SECTIONS[key].label} descargado`, 'success');
+  }
+
   function openExport(onDone) {
     const db = Storage.get();
     const host = document.createElement('div');
@@ -251,7 +259,7 @@ const Backup = (() => {
         if (!keys.length) { Utils.toast('Elige al menos una sección', 'danger'); return false; }
         const all = keys.length === Object.keys(SECTIONS).length;
         const photos = includePhotos();
-        const name = `pulso-${all ? 'respaldo' : 'parcial'}${photos ? '' : '-sin-fotos'}-${Utils.todayISO()}.json`;
+        const name = `ejercilucas-${all ? 'respaldo' : 'parcial'}${photos ? '' : '-sin-fotos'}-${Utils.todayISO()}.json`;
         Utils.download(name, buildExport(keys, photos));
         Utils.toast(all ? 'Respaldo completo descargado' : `Descargadas ${keys.length} sección(es)`, 'success');
         if (all) markDone();          // solo un export con TODAS las secciones cuenta como respaldo
@@ -270,7 +278,7 @@ const Backup = (() => {
       try { json = JSON.parse(ev.target.result); } catch (e) { json = null; }
       if (!isObj(json)) { Utils.toast('El archivo no es un respaldo válido', 'danger'); return; }
       const found = sectionsInFile(json);
-      if (!found.length) { Utils.toast('El archivo no trae ninguna sección reconocible de PULSO', 'danger'); return; }
+      if (!found.length) { Utils.toast('El archivo no trae ninguna sección reconocible de EJERCILUCAS', 'danger'); return; }
       openImport(json, found, onDone);
     };
     reader.readAsText(file);
@@ -326,7 +334,7 @@ const Backup = (() => {
         const keys = checkedKeys(host);
         if (!keys.length) { Utils.toast('Elige al menos una sección', 'danger'); return false; }
         if (host.querySelector('#bk-safety').checked) {
-          Utils.download(`pulso-antes-de-importar-${Utils.todayISO()}.json`, Storage.exportJSON());
+          Utils.download(`ejercilucas-antes-de-importar-${Utils.todayISO()}.json`, Storage.exportJSON());
         }
         let report;
         try { report = applyImport(json, keys, mode()); }
@@ -398,6 +406,6 @@ const Backup = (() => {
     return { dropped, orphans: countOrphans(data) };
   }
 
-  return { SECTIONS, normalize, openExport, startImport, applyImport, buildExport,
+  return { SECTIONS, normalize, openExport, exportSection, startImport, applyImport, buildExport,
            markDone, reminderInfo, reminderBanner, wireReminder, lastBackupText };
 })();

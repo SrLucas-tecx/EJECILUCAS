@@ -27,12 +27,16 @@ const Routines = (() => {
 
   // Última sesión ANTERIOR a `date` en la que el cliente hizo este ejercicio (en cualquier rutina)
   function priorSession(clientId, exerciseId, date, excludeId) {
+    const timed = !!Exercises.get(exerciseId)?.measureByTime;
     const prev = logsOf(clientId)
-      .filter(l => l.id !== excludeId && l.date < date && l.entries.some(e => e.exerciseId === exerciseId))
+      .filter(l => l.id !== excludeId && l.date < date && l.entries.some(e =>
+        e.exerciseId === exerciseId && e.sets.some(s => timed
+          ? Number(s.time) > 0
+          : Number(s.weight) > 0 && Number(s.reps) > 0)))
       .sort((a, b) => b.date.localeCompare(a.date))[0];
     if (!prev) return null;
     const sets = prev.entries.find(e => e.exerciseId === exerciseId).sets
-      .filter(s => Number(s.weight) > 0 && Number(s.reps) > 0);
+      .filter(s => timed ? Number(s.time) > 0 : Number(s.weight) > 0 && Number(s.reps) > 0);
     return sets.length ? { date: prev.date, sets } : null;
   }
 
@@ -57,6 +61,9 @@ const Routines = (() => {
   // Serie nueva del registro a partir de una serie objetivo de la rutina
   function newLogSet(ts, ex, clientId, date) {
     const side = sideOf(ts);
+    if (ex?.measureByTime) {
+      return { time: '', weight: ts.weight || '', reps: '', rpe: '', rir: '', side };
+    }
     if (Exercises.isBodyweight(ex)) {
       const bw = bodyWeightKg(clientId, date);
       const extra = (ts.weight === '' || ts.weight == null) ? '' : (Number(ts.weight) || 0);
@@ -129,7 +136,7 @@ const Routines = (() => {
 
   function countPRs(draft) {
     return draft.entries.reduce((n, e) =>
-      n + prIndexesForEntry(e, Exercises.get(e.exerciseId), draft.clientId, draft.date, draft.id).size, 0);
+      n + (Exercises.get(e.exerciseId)?.measureByTime ? 0 : prIndexesForEntry(e, Exercises.get(e.exerciseId), draft.clientId, draft.date, draft.id).size), 0);
   }
 
   // La mejor serie registrada JAMÁS (cualquier fecha) de este ejercicio con este cliente.
@@ -170,7 +177,7 @@ const Routines = (() => {
   function refreshRmCells(host, draft, i) {
     const entry = draft.entries[i];
     const ex = Exercises.get(entry.exerciseId);
-    if (ex && ex.trackPR === false) return;   // este ejercicio no muestra columna de PR
+    if (ex && (ex.trackPR === false || ex.measureByTime)) return;   // estos ejercicios no muestran columna de PR
     const prIdx = prIndexesForEntry(entry, ex, draft.clientId, draft.date, draft.id);
     host.querySelectorAll(`tr[data-i="${i}"]`).forEach(tr => {
       const cell = tr.querySelector('.rm-cell');
@@ -278,7 +285,7 @@ const Routines = (() => {
     const rowH = 6.2;
 
     doc.setFont('helvetica', 'bold'); doc.setFontSize(18); doc.setTextColor(20);
-    doc.text(`PULSO - ${routine.name}`, margin, y);
+    doc.text(`EJERCILUCAS - ${routine.name}`, margin, y);
     y += 7;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(110);
     doc.text(`Cliente: ${client ? client.name : ''} - Generado el ${Utils.formatDate(Utils.todayISO())}`, margin, y);
@@ -326,10 +333,11 @@ const Routines = (() => {
         doc.text(`${meta ? meta.name : '(ejercicio eliminado)'}${uni ? ' (unilateral)' : ''}`, margin, y);
         y += 5;
 
+        const metricLabel = meta?.measureByTime ? 'Tiempo (seg)' : 'Reps obj.';
         const cols = uni
-          ? [{ label: 'Serie', w: 14 }, { label: 'Lado', w: 24 }, { label: 'Reps obj.', w: 34 },
+          ? [{ label: 'Serie', w: 14 }, { label: 'Lado', w: 24 }, { label: metricLabel, w: 34 },
              { label: pesoLabel, w: 52 }, { label: 'RIR obj.', w: contentW - 124 }]
-          : [{ label: 'Serie', w: 16 }, { label: 'Reps obj.', w: 44 },
+          : [{ label: 'Serie', w: 16 }, { label: metricLabel, w: 44 },
              { label: pesoLabel, w: 60 }, { label: 'RIR obj.', w: contentW - 120 }];
 
         ensureSpace(rowH * (sets.length + 1) + 4);
@@ -348,9 +356,10 @@ const Routines = (() => {
           ensureSpace(rowH);
           x = margin;
           doc.rect(margin, y, contentW, rowH);
+          const metricValue = meta?.measureByTime ? `${s.time ?? ''} s` : s.reps ?? '';
           const values = uni
-            ? [k + 1, sideLabel[sideOf(s)], s.reps ?? '', pesoVal(s.weight), s.rir === '' || s.rir == null ? '—' : s.rir]
-            : [k + 1, s.reps ?? '', pesoVal(s.weight), s.rir === '' || s.rir == null ? '—' : s.rir];
+            ? [k + 1, sideLabel[sideOf(s)], metricValue, pesoVal(s.weight), s.rir === '' || s.rir == null ? '—' : s.rir]
+            : [k + 1, metricValue, pesoVal(s.weight), s.rir === '' || s.rir == null ? '—' : s.rir];
           cols.forEach((c, ci) => { doc.text(String(values[ci]), x + c.w / 2, y + rowH / 2 + 1.2, { align: 'center' }); x += c.w; });
           y += rowH;
         });
@@ -360,7 +369,7 @@ const Routines = (() => {
 
     ensureSpace(8);
     doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(160);
-    doc.text('Generado con PULSO - Entrenador Personal', margin, y);
+    doc.text('Generado con EJERCILUCAS - Entrenador Personal', margin, y);
 
     doc.save(`rutina-${routine.name.replace(/\s+/g, '-').toLowerCase()}.pdf`);
   }
@@ -371,9 +380,14 @@ const Routines = (() => {
     const client = State.getActiveClient();
     const editing = routineId ? get(routineId) : null;
     const draft = editing ? JSON.parse(JSON.stringify(editing)) : { clientId: client.id, name: '', notes: '', days: [newDay('Día 1')] };
+    const builderState = { activeDayIndex: 0, copiedExercises: null };
 
     const bodyHost = document.createElement('div');
-    const paint = () => { bodyHost.innerHTML = builderMarkup(draft); wireBuilder(bodyHost, draft, paint); };
+    const paint = (dayIndex = builderState.activeDayIndex) => {
+      builderState.activeDayIndex = Math.max(0, Math.min(dayIndex, draft.days.length - 1));
+      bodyHost.innerHTML = builderMarkup(draft, builderState.activeDayIndex, builderState.copiedExercises !== null);
+      wireBuilder(bodyHost, draft, paint, builderState);
+    };
 
     UI.openModal({
       title: editing ? 'Editar rutina' : 'Nueva rutina',
@@ -395,7 +409,7 @@ const Routines = (() => {
     });
   }
 
-  function builderMarkup(draft) {
+  function builderMarkup(draft, activeDayIndex, hasCopiedExercises) {
     return `
       <div style="text-align:right; margin-bottom:var(--space-2);"><button type="button" class="btn-sm btn-secondary" id="rt-glossary">❓ Glosario (RIR, PR, RPE…)</button></div>
       <label class="field field-wide"><span>Nombre de la rutina</span>
@@ -407,16 +421,20 @@ const Routines = (() => {
         <button type="button" class="rt-day-add" id="rt-day-add">+ Día</button>
       </div>
       <div id="rt-day-panels">
-        ${draft.days.map((d, i) => dayPanel(d, i)).join('')}
+        ${draft.days.map((d, i) => dayPanel(d, i, activeDayIndex, hasCopiedExercises)).join('')}
       </div>`;
   }
 
-  function dayPanel(day, i) {
+  function dayPanel(day, i, activeDayIndex, hasCopiedExercises) {
     return `
-    <div class="rt-day-panel" data-i="${i}" style="display:${i === 0 ? '' : 'none'}">
+    <div class="rt-day-panel" data-i="${i}" style="display:${i === activeDayIndex ? '' : 'none'}">
       <div class="field-inline">
         <input type="text" class="rt-day-name" data-i="${i}" value="${Utils.escapeHtml(day.name)}">
         <button type="button" class="btn-icon-sm rt-day-remove" data-i="${i}" title="Eliminar día">🗑️</button>
+      </div>
+      <div class="rt-day-copy-actions">
+        <button type="button" class="btn-sm btn-secondary rt-day-copy" data-i="${i}">📋 Copiar ejercicios</button>
+        <button type="button" class="btn-sm btn-secondary rt-day-paste" data-i="${i}" ${hasCopiedExercises ? '' : 'disabled'}>📥 Pegar ejercicios</button>
       </div>
       <div class="rt-ex-list" data-i="${i}">
         ${day.exercises.map((ex, j) => exerciseBlock(ex, i, j)).join('') || `<p class="text-muted" style="font-size:var(--fs-sm)">Sin ejercicios en este día todavía.</p>`}
@@ -437,23 +455,24 @@ const Routines = (() => {
     const meta = Exercises.get(ex.exerciseId);
     const uni = !!meta?.unilateral;
     const bwEx = Exercises.isBodyweight(meta);
+    const timed = !!meta?.measureByTime;
     const sets = normalizeTargetSets(ex);
     const unit = Utils.unitLabel();
     return `
     <div class="rt-ex-block" draggable="true" data-i="${dayI}" data-j="${exI}">
       <div class="rt-ex-block-top">
         <span class="drag-handle" title="Arrastra para reordenar">⠿⠿</span>
-        <h4>${meta ? Utils.escapeHtml(meta.name) : '(ejercicio eliminado)'}${uni ? ' <span class="chip">🔁 Unilateral</span>' : ''}${bwEx ? ' <span class="chip">🧍 Peso corporal</span>' : ''}</h4>
+        <h4>${meta ? Utils.escapeHtml(meta.name) : '(ejercicio eliminado)'}${uni ? ' <span class="chip">🔁 Unilateral</span>' : ''}${bwEx ? ' <span class="chip">🧍 Peso corporal</span>' : ''}${timed ? ' <span class="chip">⏱️ Por tiempo</span>' : ''}</h4>
         <button type="button" class="btn-icon-sm rt-ex-remove" data-i="${dayI}" data-j="${exI}" title="Quitar ejercicio">🗑️</button>
       </div>
       <table class="table-compact">
-        <thead><tr><th>Serie</th>${uni ? '<th class="col-side">Lado</th>' : ''}<th>Reps obj.</th><th>${bwEx ? `Extra obj. (${unit})` : `Peso obj. (${unit})`}</th><th>RIR obj.</th><th></th></tr></thead>
+        <thead><tr><th>Serie</th>${uni ? '<th class="col-side">Lado</th>' : ''}<th>${timed ? 'Tiempo obj. (seg)' : 'Reps obj.'}</th><th>${bwEx ? `Extra obj. (${unit})` : `Peso obj. (${unit})`}</th><th>RIR obj.</th><th></th></tr></thead>
         <tbody>
           ${sets.map((s, k) => `
             <tr data-i="${dayI}" data-j="${exI}" data-k="${k}">
               <td>${k + 1}</td>
               ${uni ? `<td class="col-side">${sideSelect('rt-set-side', `data-i="${dayI}" data-j="${exI}" data-k="${k}"`, sideOf(s))}</td>` : ''}
-              <td><input type="text" class="rt-set-input" data-f="reps" value="${Utils.escapeHtml(String(s.reps ?? ''))}" placeholder="8-12"></td>
+              <td><input type="${timed ? 'number' : 'text'}" min="${timed ? '0' : ''}" class="rt-set-input" data-f="${timed ? 'time' : 'reps'}" value="${Utils.escapeHtml(String(timed ? s.time ?? '' : s.reps ?? ''))}" placeholder="${timed ? '30' : '8-12'}"></td>
               <td><input type="number" min="0" step="0.5" class="rt-set-input" data-f="weight" ${bwEx ? 'placeholder="0 = solo peso corporal"' : ''} value="${Utils.toUnit(s.weight)}"></td>
               <td><input type="number" min="0" max="10" class="rt-set-input" data-f="rir" value="${s.rir ?? ''}"></td>
               <td><button type="button" class="btn-icon-sm rt-set-remove" data-i="${dayI}" data-j="${exI}" data-k="${k}" title="Eliminar serie">✕</button></td>
@@ -464,7 +483,7 @@ const Routines = (() => {
     </div>`;
   }
 
-  function wireBuilder(host, draft, paint) {
+  function wireBuilder(host, draft, paint, builderState) {
     host.querySelector('#rt-glossary').addEventListener('click', () => UI.openGlossary());
     host.querySelector('#rt-name').addEventListener('input', e => { draft.name = e.target.value; });
     host.querySelector('#rt-notes').addEventListener('input', e => { draft.notes = e.target.value; });
@@ -473,12 +492,13 @@ const Routines = (() => {
       host.querySelectorAll('.rt-day-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       const i = tab.dataset.i;
+      builderState.activeDayIndex = Number(i);
       host.querySelectorAll('.rt-day-panel').forEach(p => p.style.display = p.dataset.i === i ? '' : 'none');
     }));
 
     host.querySelector('#rt-day-add').addEventListener('click', () => {
       draft.days.push(newDay(`Día ${draft.days.length + 1}`));
-      paint();
+      paint(draft.days.length - 1);
     });
 
     host.querySelectorAll('.rt-day-name').forEach(inp => inp.addEventListener('input', e => {
@@ -489,15 +509,42 @@ const Routines = (() => {
     host.querySelectorAll('.rt-day-remove').forEach(btn => btn.addEventListener('click', () => {
       if (draft.days.length === 1) { Utils.toast('La rutina necesita al menos un día', 'danger'); return; }
       draft.days.splice(btn.dataset.i, 1);
-      paint();
+      paint(Math.min(Number(btn.dataset.i), draft.days.length - 1));
+    }));
+
+    host.querySelectorAll('.rt-day-copy').forEach(btn => btn.addEventListener('click', () => {
+      const day = draft.days[Number(btn.dataset.i)];
+      if (!day.exercises.length) { Utils.toast('Agrega ejercicios a este día antes de copiarlos', 'danger'); return; }
+      builderState.copiedExercises = JSON.parse(JSON.stringify(day.exercises));
+      Utils.toast(`Ejercicios de "${day.name}" copiados. Selecciona otro día y pégalos.`, 'success');
+      paint(Number(btn.dataset.i));
+    }));
+
+    host.querySelectorAll('.rt-day-paste').forEach(btn => btn.addEventListener('click', () => {
+      const dayIndex = Number(btn.dataset.i);
+      const pasteExercises = () => {
+        draft.days[dayIndex].exercises = JSON.parse(JSON.stringify(builderState.copiedExercises));
+        Utils.toast(`Ejercicios pegados en "${draft.days[dayIndex].name}"`, 'success');
+        paint(dayIndex);
+      };
+      if (!builderState.copiedExercises) return;
+      if (draft.days[dayIndex].exercises.length) {
+        UI.confirm(`Se reemplazarán los ejercicios actuales de "${Utils.escapeHtml(draft.days[dayIndex].name)}". ¿Continuar?`, pasteExercises);
+        return;
+      }
+      pasteExercises();
     }));
 
     host.querySelectorAll('.rt-add-ex').forEach(btn => btn.addEventListener('click', () => {
       const dayI = Number(btn.dataset.i);
       pickExerciseDialog(exId => {
+        const timed = !!Exercises.get(exId)?.measureByTime;
         draft.days[dayI].exercises.push({
           exerciseId: exId,
-          targetSets: [{ reps: '8-12', weight: '', rir: '', side: 'ambos' }, { reps: '8-12', weight: '', rir: '', side: 'ambos' }, { reps: '8-12', weight: '', rir: '', side: 'ambos' }]
+          targetSets: Array.from({ length: 3 }, () => ({
+            ...(timed ? { time: '' } : { reps: '8-12' }),
+            weight: '', rir: '', side: 'ambos'
+          }))
         });
         paint();
       });
@@ -511,7 +558,8 @@ const Routines = (() => {
     host.querySelectorAll('.rt-set-add').forEach(btn => btn.addEventListener('click', () => {
       const ex = draft.days[btn.dataset.i].exercises[btn.dataset.j];
       if (!Array.isArray(ex.targetSets)) ex.targetSets = normalizeTargetSets(ex);
-      ex.targetSets.push({ reps: '8-12', weight: '', rir: '', side: 'ambos' });
+      const timed = !!Exercises.get(ex.exerciseId)?.measureByTime;
+      ex.targetSets.push({ ...(timed ? { time: '' } : { reps: '8-12' }), weight: '', rir: '', side: 'ambos' });
       paint();
     }));
 
@@ -622,8 +670,13 @@ const Routines = (() => {
     const refreshSummary = () => {
       const sum = host.querySelector('#log-summary');
       if (!sum) return;
-      const allSets = logDraft.entries.flatMap(e => e.sets).filter(s => s.weight !== '' && s.reps !== '');
-      const vol = Utils.toUnit(Utils.totalVolume(allSets));
+      const allSets = logDraft.entries.flatMap(e => {
+        const timed = !!Exercises.get(e.exerciseId)?.measureByTime;
+        return e.sets.filter(s => timed ? Number(s.time) > 0 : s.weight !== '' && s.reps !== '');
+      });
+      const volumeSets = logDraft.entries.filter(e => !Exercises.get(e.exerciseId)?.measureByTime)
+        .flatMap(e => e.sets).filter(s => s.weight !== '' && s.reps !== '');
+      const vol = Utils.toUnit(Utils.totalVolume(volumeSets));
       const eff = Utils.effectiveSets(allSets);
       const editingNote = logDraft.id ? ' · ✏️ editando un registro ya guardado de este día' : '';
       const prs = countPRs(logDraft);
@@ -641,7 +694,9 @@ const Routines = (() => {
       onConfirm: () => {
         const cleaned = { ...logDraft, entries: logDraft.entries.map(e => {
           const ex = Exercises.get(e.exerciseId);
-          return { ...e, sets: e.sets.filter(s => s.weight !== '' && s.reps !== '')
+          return { ...e, sets: e.sets.filter(s => ex?.measureByTime
+            ? Number(s.time) > 0
+            : s.weight !== '' && s.reps !== '')
             .map(s => {
               const out = { ...s, unilateral: !!(ex && ex.unilateral && sideOf(s) === 'ambos') };
               // Series nuevas de peso corporal: extra numérico y carga total = cuerpo + extra.
@@ -669,7 +724,11 @@ const Routines = (() => {
 
   // Última vez, en texto: por lado si el ejercicio es unilateral (los lados no se promedian:
   // un desbalance de fuerza entre lados es información útil, no ruido a esconder).
-  function lastTimeText(prior, uni, unit, bwEx) {
+  function lastTimeText(prior, uni, unit, bwEx, timed = false) {
+    if (timed) {
+      const best = prior.sets.reduce((a, s) => Number(s.time) > Number(a.time) ? s : a);
+      return `Última vez (${Utils.formatDate(prior.date, { withYear: false })}): mejor serie <strong>${best.time} s</strong>`;
+    }
     if (!uni) {
       const best = prior.sets.reduce((b, s) => Utils.estimate1RM(s.weight, s.reps) > Utils.estimate1RM(b.weight, b.reps) ? s : b);
       return `Última vez (${Utils.formatDate(prior.date, { withYear: false })}): mejor serie <strong>${loadText(best, bwEx, unit)} × ${best.reps}</strong>`;
@@ -706,42 +765,47 @@ const Routines = (() => {
         const meta = Exercises.get(entry.exerciseId);
         const uni = !!meta?.unilateral;
         const bwEx = Exercises.isBodyweight(meta);
+        const timed = !!meta?.measureByTime;
         const bwKg = bwEx ? bodyWeightKg(draft.clientId, draft.date) : 0;
-        const tracks = meta?.trackPR !== false;
-        const prior = tracks ? priorSession(draft.clientId, entry.exerciseId, draft.date, draft.id) : null;
+        const tracks = !timed && meta?.trackPR !== false;
+        const showPrior = tracks || timed;
+        const prior = showPrior ? priorSession(draft.clientId, entry.exerciseId, draft.date, draft.id) : null;
         const prIdx = tracks ? prIndexesForEntry(entry, meta, draft.clientId, draft.date, draft.id) : new Set();
         const routineEx = routine.days[dayIndex].exercises.find(x => x.exerciseId === entry.exerciseId);
         const hint = (tracks && !uni && !bwEx) ? overloadHint(prior, routineEx) : null;   // el aviso de sobrecarga no distingue lado todavía
-        const cols = 5 + (uni ? 1 : 0) + (tracks ? 2 : 0);
+        const cols = 6 + (uni ? 1 : 0) + (showPrior ? 1 : 0) + (tracks ? 1 : 0);
         return `
         <div class="log-exercise">
           <div class="log-ex-head">
-            <h4>${meta ? Utils.escapeHtml(meta.name) : 'Ejercicio'}${uni ? ' <span class="chip">🔁 Unilateral</span>' : ''}${bwEx ? ' <span class="chip">🧍 Peso corporal</span>' : ''}</h4>
+            <h4>${meta ? Utils.escapeHtml(meta.name) : 'Ejercicio'}${uni ? ' <span class="chip">🔁 Unilateral</span>' : ''}${bwEx ? ' <span class="chip">🧍 Peso corporal</span>' : ''}${timed ? ' <span class="chip">⏱️ Por tiempo</span>' : ''}</h4>
             ${prior ? `<button type="button" class="btn-sm btn-secondary log-copy-prev" data-i="${i}">↺ Copiar última sesión</button>` : ''}
           </div>
-          ${bwEx ? `<p class="log-prev-info">${bwKg
+          ${bwEx ? `<p class="log-prev-info">${timed
+            ? 'Puedes anotar un lastre opcional; el resultado principal de este ejercicio se registra por tiempo.'
+            : bwKg
             ? `Peso corporal: <strong>${Utils.toUnit(bwKg)} ${unit}</strong> + el extra que anotes (déjalo vacío si no agregas peso). El volumen y el 1RM usan el peso total.`
             : 'Registra el peso corporal del cliente en Progreso para que el volumen y el 1RM lo incluyan; mientras tanto solo cuenta el extra.'}</p>` : ''}
-          ${tracks ? `<p class="log-prev-info">${prior ? lastTimeText(prior, uni, unit, bwEx) : 'Sin sesiones anteriores registradas de este ejercicio.'}</p>` : ''}
+          ${showPrior ? `<p class="log-prev-info">${prior ? lastTimeText(prior, uni, unit, bwEx, timed) : 'Sin sesiones anteriores registradas de este ejercicio.'}</p>` : ''}
           ${hint ? `<p class="log-suggest">💡 Completaste ${hint.top}+ reps en todas las series con ${hint.from} ${unit}. Prueba con ${hint.to} ${unit}.</p>` : ''}
           <table class="table-compact">
             <thead><tr>
-              <th>Serie</th>${uni ? '<th>Lado</th>' : ''}${tracks ? '<th>Anterior</th>' : ''}
-              <th>${bwEx ? `Extra (${unit})` : `Peso (${unit})`}</th><th>Reps</th><th>RIR</th><th>RPE</th>${tracks ? '<th>1RM est.</th>' : ''}<th></th>
+              <th>Serie</th>${uni ? '<th>Lado</th>' : ''}${showPrior ? '<th>Anterior</th>' : ''}
+              <th>${bwEx ? `Extra (${unit})` : `Peso (${unit})`}</th><th>${timed ? 'Tiempo (seg)' : 'Reps'}</th><th>RIR</th><th>RPE</th>${tracks ? '<th>1RM est.</th>' : ''}<th></th>
             </tr></thead>
             <tbody>
               ${entry.sets.map((s, j) => {
                 const prev = prior && prior.sets[j];
                 const prevTag = prev && uni ? { izq: 'Izq ', der: 'Der ', ambos: '' }[sideOf(prev)] : '';
+                const prevMetric = prev ? timed ? `${prev.time} s` : `${loadText(prev, bwEx, unit)} × ${prev.reps}` : '—';
                 return `
                 <tr data-i="${i}" data-j="${j}">
                   <td>${j + 1}</td>
                   ${uni ? `<td>${sideSelect('log-set-side', `data-i="${i}" data-j="${j}"`, sideOf(s))}</td>` : ''}
-                  ${tracks ? `<td class="prev-cell">${prev ? `${prevTag}${loadText(prev, bwEx, unit)} × ${prev.reps}` : '—'}</td>` : ''}
+                  ${showPrior ? `<td class="prev-cell">${prev ? `${prevTag}${prevMetric}` : '—'}</td>` : ''}
                   <td>${bwEx
                     ? `<input type="number" min="0" step="0.5" class="rt-input" data-f="extra" placeholder="0" value="${Utils.toUnit(s.extra ?? s.weight)}">`
                     : `<input type="number" min="0" step="0.5" class="rt-input" data-f="weight" value="${Utils.toUnit(s.weight)}">`}</td>
-                  <td><input type="number" min="0" class="rt-input" data-f="reps" value="${s.reps}"></td>
+                  <td><input type="number" min="0" class="rt-input" data-f="${timed ? 'time' : 'reps'}" value="${timed ? s.time ?? '' : s.reps}"></td>
                   <td><input type="number" min="0" max="10" class="rt-input" data-f="rir" value="${s.rir}"></td>
                   <td><input type="number" min="1" max="10" class="rt-input" data-f="rpe" value="${s.rpe}"></td>
                   ${tracks ? `<td class="rm-cell">${rmCellHtml(s, prIdx.has(j))}</td>` : ''}
@@ -806,7 +870,7 @@ const Routines = (() => {
       repaint();
     }));
 
-    // Rellena reps (y peso, si está vacío) con lo que hizo en la última sesión, lado incluido
+    // Rellena el objetivo medido y el peso con lo que hizo en la última sesión
     host.querySelectorAll('.log-copy-prev').forEach(btn => btn.addEventListener('click', () => {
       const entry = draft.entries[btn.dataset.i];
       const prior = priorSession(draft.clientId, entry.exerciseId, draft.date, draft.id);
@@ -814,10 +878,12 @@ const Routines = (() => {
       prior.sets.forEach((ps, j) => {
         const exMeta = Exercises.get(entry.exerciseId);
         const bwEx = Exercises.isBodyweight(exMeta);
+        const timed = !!exMeta?.measureByTime;
         if (!entry.sets[j]) entry.sets[j] = newLogSet({ weight: '', side: sideOf(ps) }, exMeta, draft.clientId, draft.date);
         const cur = entry.sets[j];
-        if (cur.reps === '') {
-          cur.reps = ps.reps;
+        if (timed ? cur.time == null || cur.time === '' : cur.reps === '') {
+          if (timed) cur.time = ps.time;
+          else cur.reps = ps.reps;
           if (bwEx) { if (cur.extra === '' || cur.extra == null) setExtra(cur, Number(ps.extra ?? ps.weight) || 0); }
           else if (cur.weight === '') cur.weight = ps.weight;
           if (!cur.side || cur.side === 'ambos') cur.side = sideOf(ps);
@@ -861,7 +927,12 @@ const Routines = (() => {
   function sessionCard(routine, log) {
     const day = routine.days.find(d => d.id === log.dayId);
     const allSets = log.entries.flatMap(e => e.sets);
-    const vol = Utils.toUnit(Utils.totalVolume(allSets));
+    const volumeSets = log.entries.filter(e => !Exercises.get(e.exerciseId)?.measureByTime)
+      .flatMap(e => e.sets);
+    const vol = Utils.toUnit(Utils.totalVolume(volumeSets));
+    const timedSeconds = log.entries.reduce((sum, e) => sum + (Exercises.get(e.exerciseId)?.measureByTime
+      ? e.sets.reduce((total, set) => total + (Number(set.time) || 0), 0)
+      : 0), 0);
     const eff = Utils.effectiveSets(allSets);
     const unit = Utils.unitLabel();
     return `
@@ -871,7 +942,7 @@ const Routines = (() => {
           <strong>${Utils.formatDate(log.date)}</strong>
           <span class="chip">${day ? Utils.escapeHtml(day.name) : 'Día eliminado'}</span>
         </div>
-        <div class="text-muted history-session-stats">${vol} ${unit} vol. · ${eff} series efectivas${log.minutes ? ' · ' + log.minutes + ' min' : ''}</div>
+        <div class="text-muted history-session-stats">${vol} ${unit} vol. · ${eff} series efectivas${timedSeconds ? ` · ${timedSeconds} s por tiempo` : ''}${log.minutes ? ' · ' + log.minutes + ' min' : ''}</div>
         <div class="history-session-actions">
           <button type="button" class="btn-icon-sm hs-toggle" title="Ver detalle">👁️</button>
           <button type="button" class="btn-icon-sm hs-edit" title="Editar">✏️</button>
@@ -883,20 +954,21 @@ const Routines = (() => {
           const meta = Exercises.get(e.exerciseId);
           const uni = !!meta?.unilateral;
           const bwEx = Exercises.isBodyweight(meta);
+          const timed = !!meta?.measureByTime;
           const sideLabel = { izq: 'Izquierdo', der: 'Derecho', ambos: 'Ambos' };
           return `
           <div class="history-ex">
             <strong>${meta ? Utils.escapeHtml(meta.name) : '(ejercicio eliminado)'}${uni ? ' <span class="chip">🔁 Unilateral</span>' : ''}</strong>
             <table class="table-compact">
-              <thead><tr><th>Serie</th>${uni ? '<th>Lado</th>' : ''}<th>${bwEx ? `Extra (${unit})` : `Peso (${unit})`}</th><th>Reps</th><th>RIR</th><th>RPE</th><th>1RM est.</th></tr></thead>
+              <thead><tr><th>Serie</th>${uni ? '<th>Lado</th>' : ''}<th>${bwEx ? `Extra (${unit})` : `Peso (${unit})`}</th><th>${timed ? 'Tiempo (seg)' : 'Reps'}</th><th>RIR</th><th>RPE</th>${timed ? '' : '<th>1RM est.</th>'}</tr></thead>
               <tbody>
                 ${e.sets.map((s, i) => `<tr>
                   <td>${i + 1}</td>
                   ${uni ? `<td>${sideLabel[sideOf(s)]}</td>` : ''}
-                  <td>${bwEx ? (Number(s.extra ?? s.weight) ? Utils.toUnit(s.extra ?? s.weight) : 'PC') : Utils.toUnit(s.weight)}</td><td>${s.reps}</td>
+                  <td>${bwEx ? (Number(s.extra ?? s.weight) ? Utils.toUnit(s.extra ?? s.weight) : 'PC') : Utils.toUnit(s.weight)}</td><td>${timed ? `${s.time ?? ''} s` : s.reps}</td>
                   <td>${s.rir === '' || s.rir == null ? '—' : s.rir}</td>
                   <td>${s.rpe === '' || s.rpe == null ? '—' : s.rpe}</td>
-                  <td>${s.weight && s.reps ? Utils.toUnit(Utils.estimate1RM(s.weight, s.reps)) + ' ' + unit : '—'}</td>
+                  ${timed ? '' : `<td>${s.weight && s.reps ? Utils.toUnit(Utils.estimate1RM(s.weight, s.reps)) + ' ' + unit : '—'}</td>`}
                 </tr>`).join('')}
               </tbody>
             </table>

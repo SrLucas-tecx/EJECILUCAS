@@ -13,7 +13,7 @@ const Progress = (() => {
     weight: 'Peso corporal',
     bodyfat: '% grasa corporal',
     volume: 'Volumen de entrenamiento (mensual)',
-    strength: 'Fuerza — peso usado y 1RM estimado'
+    strength: 'Fuerza o duración del ejercicio'
   };
 
   function logsOf(clientId) { return Storage.all('progressLogs').filter(p => p.clientId === clientId).sort((a, b) => a.date.localeCompare(b.date)); }
@@ -30,10 +30,14 @@ const Progress = (() => {
       .sort((a, b) => a.date.localeCompare(b.date));
     return logs.map(l => {
       const entry = l.entries.find(e => e.exerciseId === exerciseId);
+      if (Exercises.get(exerciseId)?.measureByTime) {
+        const seconds = Math.max(0, ...entry.sets.map(s => Number(s.time) || 0));
+        return { date: l.date, seconds };
+      }
       const best1RM = Math.max(...entry.sets.map(s => Utils.estimate1RM(s.weight, s.reps)));
       const maxWeight = Math.max(...entry.sets.map(s => Number(s.weight) || 0));
       return { date: l.date, est1RM: Utils.round(best1RM, 1), maxWeight: Utils.round(maxWeight, 1) };
-    }).filter(s => s.est1RM > 0);
+    }).filter(s => s.seconds > 0 || s.est1RM > 0);
   }
 
   function elapsedLabel(startISO) {
@@ -288,7 +292,7 @@ const Progress = (() => {
       const byMonth = {};
       logs.forEach(l => {
         const key = Utils.monthKey(l.date);
-        const vol = l.entries.reduce((s, e) => s + Utils.totalVolume(e.sets), 0);
+        const vol = l.entries.reduce((s, e) => s + (Exercises.get(e.exerciseId)?.measureByTime ? 0 : Utils.totalVolume(e.sets)), 0);
         byMonth[key] = (byMonth[key] || 0) + vol;
       });
       const keys = Object.keys(byMonth).sort();
@@ -303,15 +307,15 @@ const Progress = (() => {
       const chartOpts = Charts.lineOptions();
       chartOpts.plugins.legend.display = true;
       chartOpts.plugins.legend.position = 'bottom';
+      const datasets = ex?.measureByTime
+        ? [{ label: 'Mejor duración (segundos)', data: series.map(s => s.seconds), borderColor: '#5EEAD4', backgroundColor: hexToRgba('#5EEAD4', .12), fill: true, pointBackgroundColor: '#5EEAD4' }]
+        : [
+          { label: `Peso máx. usado (${unit})`, data: series.map(s => Utils.toUnit(s.maxWeight)), borderColor: '#5EEAD4', backgroundColor: hexToRgba('#5EEAD4', .12), fill: true, pointBackgroundColor: '#5EEAD4' },
+          { label: `1RM estimado (${unit})`, data: series.map(s => Utils.toUnit(s.est1RM)), borderColor: '#FF4B6E', backgroundColor: hexToRgba('#FF4B6E', .12), fill: true, pointBackgroundColor: '#FF4B6E' }
+        ];
       canvas._chart = new Chart(canvas, {
         type: 'line',
-        data: {
-          labels,
-          datasets: [
-            { label: `Peso máx. usado (${unit})`, data: series.map(s => Utils.toUnit(s.maxWeight)), borderColor: '#5EEAD4', backgroundColor: hexToRgba('#5EEAD4', .12), fill: true, pointBackgroundColor: '#5EEAD4' },
-            { label: `1RM estimado (${unit})`, data: series.map(s => Utils.toUnit(s.est1RM)), borderColor: '#FF4B6E', backgroundColor: hexToRgba('#FF4B6E', .12), fill: true, pointBackgroundColor: '#FF4B6E' }
-          ]
-        },
+        data: { labels, datasets },
         options: chartOpts
       });
       return;
@@ -342,15 +346,18 @@ const Progress = (() => {
     }));
     const workoutRows = Routines.logsOf(client.id).flatMap(l => l.entries.map(e => {
       const ex = Exercises.get(e.exerciseId);
-      const vol = Utils.totalVolume(e.sets);
-      const best1RM = Math.max(0, ...e.sets.map(s => Utils.estimate1RM(s.weight, s.reps)));
+      const timed = !!ex?.measureByTime;
+      const vol = timed ? 0 : Utils.totalVolume(e.sets);
+      const best1RM = timed ? 0 : Math.max(0, ...e.sets.map(s => Utils.estimate1RM(s.weight, s.reps)));
+      const bestTime = timed ? Math.max(0, ...e.sets.map(s => Number(s.time) || 0)) : '';
       return {
         Fecha: l.date, Ejercicio: ex ? ex.name : '(eliminado)', Series: e.sets.length,
         [`Volumen (${unit})`]: Utils.toUnit(vol), [`1RM estimado (${unit})`]: Utils.toUnit(best1RM),
+        'Mejor duración (seg)': bestTime,
         'Series efectivas': Utils.effectiveSets(e.sets), 'Duración (min)': l.minutes || ''
       };
     }));
-    Utils.exportExcel(`pulso-progreso-${client.name.replace(/\s+/g, '-').toLowerCase()}.xlsx`, {
+    Utils.exportExcel(`ejercilucas-progreso-${client.name.replace(/\s+/g, '-').toLowerCase()}.xlsx`, {
       Progreso: progressRows, Entrenamientos: workoutRows
     });
   }

@@ -68,7 +68,7 @@ const UI = (() => {
       container.innerHTML = `
         <div class="hero-card">
           <div>
-            <h2>Bienvenido a PULSO</h2>
+            <h2>Bienvenido a EJERCILUCAS</h2>
             <p>Tu centro de control para entrenar clientes: rutinas, ejercicios con tutoriales, alimentación y progreso — todo guardado en este navegador.</p>
             <button class="btn-primary" onclick="Clients.createClient()">+ Agregar tu primer cliente</button>
           </div>
@@ -109,8 +109,11 @@ const UI = (() => {
         <div class="chart-card">
           <h4>Últimos entrenamientos</h4>
           ${recentWorkouts.length ? `<ul class="simple-list">${recentWorkouts.map(w => {
-            const vol = w.entries.reduce((s, e) => s + Utils.totalVolume(e.sets), 0);
-            return `<li><strong>${Utils.formatDate(w.date, { withYear: false })}</strong> — ${Utils.toUnit(vol)} ${Utils.unitLabel()} de volumen</li>`;
+            const vol = w.entries.reduce((s, e) => s + (Exercises.get(e.exerciseId)?.measureByTime ? 0 : Utils.totalVolume(e.sets)), 0);
+            const timedSeconds = w.entries.reduce((s, e) => s + (Exercises.get(e.exerciseId)?.measureByTime
+              ? e.sets.reduce((total, set) => total + (Number(set.time) || 0), 0)
+              : 0), 0);
+            return `<li><strong>${Utils.formatDate(w.date, { withYear: false })}</strong> — ${Utils.toUnit(vol)} ${Utils.unitLabel()} de volumen${timedSeconds ? ` · ${timedSeconds} s en ejercicios por tiempo` : ''}</li>`;
           }).join('')}</ul>` : `<p class="text-muted">Aún no hay entrenamientos registrados.</p>`}
         </div>
         <div class="chart-card">
@@ -142,12 +145,19 @@ const UI = (() => {
       <div class="settings-grid">
         <div class="settings-card">
           <h4>💾 Copia de seguridad</h4>
-          <p class="text-muted">Exporta o importa todo, o solo las secciones que elijas (clientes, rutinas, nutrición, progreso...).</p>
+          <p class="text-muted">Descarga un archivo JSON independiente por categoría o crea un respaldo personalizado.</p>
           <p class="text-muted" style="margin:0; font-size:var(--fs-xs);">${Backup.lastBackupText()}</p>
+          <h5>Respaldar una categoría</h5>
+          <div class="backup-category-list">
+            ${Object.entries(Backup.SECTIONS).map(([key, section]) => `
+              <button type="button" class="btn-sm btn-secondary" data-backup-section="${key}">📄 ${section.label}</button>
+            `).join('')}
+          </div>
           <button class="btn-primary" id="st-export">📄 Exportar datos…</button>
           <label class="btn-secondary" style="display:inline-flex;cursor:pointer;">📥 Importar datos…
             <input type="file" id="st-import" accept=".json" style="display:none">
           </label>
+          <p class="text-muted" style="font-size:var(--fs-xs);">Al importar, selecciona las categorías del archivo y elige <strong>Combinar</strong> para conservar lo actual o <strong>Reemplazar</strong> para sustituir esas categorías.</p>
         </div>
         <div class="settings-card">
           <h4>🎨 Apariencia</h4>
@@ -174,6 +184,9 @@ const UI = (() => {
       </div>`;
 
     container.querySelector('#st-export').addEventListener('click', () => Backup.openExport(() => renderSettings(container)));
+    container.querySelectorAll('[data-backup-section]').forEach(button => {
+      button.addEventListener('click', () => Backup.exportSection(button.dataset.backupSection));
+    });
     container.querySelector('#st-import').addEventListener('change', e => {
       const file = e.target.files[0];
       e.target.value = ''; // permite volver a elegir el mismo archivo

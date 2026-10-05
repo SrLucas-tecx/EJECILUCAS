@@ -38,6 +38,7 @@ const Storage = (() => {
     // Migración: ejercicios guardados antes de estos campos no los traen.
     db.exercises.forEach(ex => {
       if (typeof ex.unilateral !== 'boolean') ex.unilateral = false;
+      if (typeof ex.measureByTime !== 'boolean') ex.measureByTime = false;
       if (typeof ex.trackPR !== 'boolean') ex.trackPR = true;
     });
     save();

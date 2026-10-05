@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
   backupBtn.addEventListener('click', e => { e.stopPropagation(); backupMenu.classList.toggle('open'); });
   document.addEventListener('click', () => backupMenu.classList.remove('open'));
   document.getElementById('backup-export-quick').addEventListener('click', () => {
-    Utils.download(`pulso-respaldo-${Utils.todayISO()}.json`, Storage.exportJSON());
+    Utils.download(`ejercilucas-respaldo-${Utils.todayISO()}.json`, Storage.exportJSON());
     Backup.markDone();
     UI.renderCurrentTab();
     Utils.toast('Respaldo descargado', 'success');
