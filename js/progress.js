@@ -362,5 +362,5 @@ const Progress = (() => {
     });
   }
 
-  return { MEASURE_FIELDS, METRICS, logsOf, renderPage };
+  return { MEASURE_FIELDS, METRICS, logsOf, renderPage, openEntry };
 })();

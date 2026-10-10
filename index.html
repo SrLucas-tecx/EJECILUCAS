@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>EJERCILUCAS — Entrenador Personal</title>
   <meta name="description" content="Gestiona clientes, rutinas, ejercicios, nutrición y progreso — todo guardado localmente en tu navegador.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,6 +12,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <link rel="stylesheet" href="css/styles.css">
+  <!-- Rediseño amigable (Sprint 1): va después de styles.css -->
+  <link rel="stylesheet" href="css/theme-amigable.css">
 </head>
 <body class="dark">
 
@@ -62,14 +64,14 @@
   <!-- ═══════════════ MAIN ═══════════════ -->
   <main class="main-area">
     <header class="header">
-      <button class="btn-icon" id="btn-toggle-sidebar" title="Menú">☰</button>
+      <button class="btn-icon" id="btn-toggle-sidebar" title="Menú" aria-label="Abrir menú">☰</button>
       <h1 class="header-title" id="page-title">Resumen</h1>
 
       <div class="control-group-inline">
         <span class="active-client-banner" id="active-client-banner"></span>
-        <select id="client-select-global" class="filter-select" title="Cliente activo"></select>
-        <button class="btn-icon" id="btn-glossary" title="Glosario: qué significan RIR, PR, RPE…">❓</button>
-        <button class="btn-icon" id="btn-new-client-header" title="Nuevo cliente">➕</button>
+        <select id="client-select-global" class="filter-select" title="Cliente activo" aria-label="Cliente activo"></select>
+        <button class="btn-icon" id="btn-glossary" title="Glosario: qué significan RIR, PR, RPE…" aria-label="Abrir glosario">❓</button>
+        <button class="btn-icon" id="btn-new-client-header" title="Nuevo cliente" aria-label="Nuevo cliente">➕</button>
       </div>
     </header>
 
@@ -77,12 +79,21 @@
   </main>
 </div>
 
+<!-- ═══════════════ BARRA INFERIOR (solo móvil) ═══════════════ -->
+<nav class="bottom-nav" id="bottom-nav" aria-label="Navegación principal">
+  <button class="bn-item active" data-tab="dashboard"><span class="bn-icon">🏠</span><span>Resumen</span></button>
+  <button class="bn-item" data-tab="rutinas"><span class="bn-icon">🏋️</span><span>Rutinas</span></button>
+  <button class="bn-item" data-tab="ejercicios"><span class="bn-icon">📚</span><span>Ejercicios</span></button>
+  <button class="bn-item" data-tab="progreso"><span class="bn-icon">📊</span><span>Progreso</span></button>
+  <button class="bn-item" id="bn-more"><span class="bn-icon">☰</span><span>Más</span></button>
+</nav>
+
 <!-- ═══════════════ MODAL GENÉRICO ═══════════════ -->
 <div class="modal-overlay" id="modal-overlay">
   <div class="modal" id="modal">
     <div class="modal-header">
       <h3 id="modal-title"></h3>
-      <button class="btn-icon-sm" id="modal-cancel-x">✕</button>
+      <button class="btn-icon-sm" id="modal-cancel-x" aria-label="Cerrar">✕</button>
     </div>
     <div class="modal-body" id="modal-body"></div>
     <div class="modal-footer" id="modal-footer">

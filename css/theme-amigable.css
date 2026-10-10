@@ -1,0 +1,178 @@
+/* ==========================================================================
+   EJERCILUCAS — Rediseño amigable · SPRINT 1 (base)
+   Se carga DESPUÉS de styles.css y solo ajusta lo necesario:
+   texto más legible, botones fáciles de tocar, barra de navegación inferior
+   en móvil y ventanas (modales) que suben desde abajo.
+   Para volver al diseño anterior basta con quitar el <link> de este archivo.
+   ========================================================================== */
+
+/* ---------------- 1. Texto y contraste ---------------- */
+:root{
+  --fs-xs:.8rem;
+  --fs-sm:.92rem;
+  --fs-md:1.05rem;
+  --radius-md:14px;
+  --radius-lg:20px;
+  --touch:44px;               /* tamaño mínimo cómodo para el dedo */
+}
+body{ font-size:16px; line-height:1.55; }
+body.dark{ --color-text-muted:#A3ABBA; }
+body:not(.dark){ --color-text-muted:#596073; }
+
+.page-content > *{ max-width:1180px; margin-left:auto; margin-right:auto; }
+
+/* ---------------- 2. Botones y campos más cómodos ---------------- */
+.btn-primary, .btn-secondary, .btn-danger{ min-height:var(--touch); padding:var(--space-2) var(--space-4); }
+.btn-sm{ min-height:36px; padding:6px 14px; }
+.btn-icon{ min-height:40px; }
+.btn-icon-sm{ width:36px; height:36px; font-size:1rem; }
+.btn-primary:active, .btn-secondary:active, .btn-sm:active, .bn-item:active{ transform:scale(.97); }
+
+.filter-select, select, input[type=text], input[type=email], input[type=tel], input[type=number],
+input[type=date], input[type=time], input[type=url], textarea{
+  min-height:42px;
+}
+.filter-select:focus, select:focus, input:focus, textarea:focus{
+  outline:none; border-color:var(--color-accent);
+  box-shadow:0 0 0 3px var(--color-accent-soft);
+}
+.rt-input{ width:76px; min-height:40px; text-align:center; }
+
+/* ---------------- 3. Menú lateral (escritorio) ---------------- */
+.nav-item{ padding:10px var(--space-3); font-size:.95rem; }
+.nav-item.active{ box-shadow:inset 3px 0 0 var(--color-accent); }
+.nav-group-label{ font-size:.72rem; }
+
+/* ---------------- 4. Tarjetas con más aire ---------------- */
+.stat-card{ padding:var(--space-4); }
+.stat-card strong{ font-size:1.4rem; }
+.client-card, .exercise-card, .routine-card, .settings-card, .chart-card{ border-radius:var(--radius-lg); }
+.empty-state p{ max-width:36ch; margin-left:auto; margin-right:auto; }
+
+/* ---------------- 5. Barra inferior (solo móvil) ---------------- */
+.bottom-nav{
+  display:none; position:fixed; left:0; right:0; bottom:0; z-index:30;
+  background:var(--color-bg-elevated); border-top:1px solid var(--color-border);
+  padding:6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+  justify-content:space-around; gap:2px;
+}
+.bn-item{
+  flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
+  background:none; border:none; color:var(--color-text-muted);
+  min-height:54px; padding:4px 0; font-size:.72rem; font-weight:600;
+  border-radius:var(--radius-md); transition:transform .1s, color .15s;
+}
+.bn-icon{
+  font-size:1.25rem; line-height:1; padding:4px 18px; border-radius:var(--radius-pill);
+  transition:background .2s;
+}
+.bn-item.active{ color:var(--color-text); }
+.bn-item.active .bn-icon{ background:var(--color-accent-soft); }
+body.modal-open .bottom-nav{ display:none; }
+
+/* ---------------- 6. Móvil ---------------- */
+@media (max-width: 860px){
+  .bottom-nav{ display:flex; }
+  body.modal-open .bottom-nav{ display:none; }
+
+  /* El contenido no debe quedar tapado por la barra inferior */
+  .page-content{ padding:var(--space-4); padding-bottom:calc(92px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Encabezado más simple: título arriba, cliente activo abajo a todo lo ancho */
+  .header{ gap:var(--space-2); padding:var(--space-3); }
+  .header-title{ font-size:var(--fs-md); min-width:0; }
+  .active-client-banner{ display:none; }
+  .control-group-inline{ width:100%; flex-wrap:nowrap; }
+  #client-select-global{ flex:1; min-width:0; }
+
+  /* El texto de los campos a 16px evita el zoom automático del teléfono */
+  .filter-select, select, input, textarea{ font-size:16px; }
+  .btn-sm{ min-height:var(--touch); }
+  .btn-icon-sm{ width:var(--touch); height:var(--touch); }
+  .rt-input{ min-height:44px; }
+
+  /* Las avisos (toast) suben para no taparse con la barra inferior */
+  .toast-host{ left:var(--space-3); right:var(--space-3); bottom:calc(76px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Ventanas: suben desde abajo, como una hoja */
+  .modal-overlay{ align-items:flex-end; padding:0; }
+  .modal, .modal.modal-wide{
+    width:100%; max-height:92vh; border-radius:var(--radius-lg) var(--radius-lg) 0 0;
+    animation:sheet-up .22s ease-out;
+  }
+  .modal-body{ overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .modal-footer{
+    padding-bottom:calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  }
+  .modal-footer .btn-primary, .modal-footer .btn-secondary{ flex:1; }
+}
+
+@keyframes sheet-up{
+  from{ transform:translateY(24px); opacity:0; }
+  to{ transform:translateY(0); opacity:1; }
+}
+
+/* ---------------- 7. Accesibilidad: respetar "reducir movimiento" ---------------- */
+@media (prefers-reduced-motion: reduce){
+  *{ animation:none !important; transition:none !important; }
+}
+
+/* ==========================================================================
+   SPRINT 2 — Resumen "Hoy"
+   ========================================================================== */
+.today-card{
+  background:var(--color-bg-card); border:1px solid var(--color-border);
+  border-radius:var(--radius-lg); padding:var(--space-4);
+  display:flex; flex-direction:column; gap:var(--space-4);
+}
+.today-head{ display:flex; align-items:center; gap:var(--space-3); }
+.today-head h2{ font-size:var(--fs-xl); }
+.today-date{ margin:0 0 2px; font-size:var(--fs-sm); font-weight:600; color:var(--color-accent); }
+
+/* El elemento protagonista: un solo botón grande para lo que más se hace */
+.today-cta{
+  display:flex; align-items:center; gap:var(--space-3); width:100%; text-align:left;
+  background:var(--color-accent); color:#fff; border:none; border-radius:var(--radius-lg);
+  padding:var(--space-4); min-height:76px; transition:background .15s, transform .1s;
+}
+.today-cta:hover{ background:var(--color-accent-dark); }
+.today-cta:active{ transform:scale(.99); }
+.today-cta.is-done{ background:var(--color-bg-elevated); color:var(--color-text); border:1px solid var(--color-success); }
+.today-cta.is-done:hover{ background:var(--color-bg-elevated); border-color:var(--color-accent); }
+.today-cta-icon{ font-size:1.8rem; line-height:1; }
+.today-cta-text{ flex:1; min-width:0; display:flex; flex-direction:column; }
+.today-cta-text strong{ font-family:var(--font-display); font-size:var(--fs-lg); }
+.today-cta-text small{ font-size:var(--fs-sm); opacity:.9; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.today-cta-go{ font-size:1.8rem; line-height:1; opacity:.8; }
+
+.quick-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:var(--space-3); margin-top:var(--space-3); }
+.quick-btn{
+  display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left;
+  background:var(--color-bg-card); border:1px solid var(--color-border); color:var(--color-text);
+  border-radius:var(--radius-lg); padding:var(--space-3) var(--space-4); min-height:var(--touch);
+}
+.quick-btn:hover{ border-color:var(--color-accent); }
+.quick-btn:active{ transform:scale(.98); }
+.quick-btn span{ font-size:1.4rem; line-height:1.2; }
+.quick-btn strong{ font-size:var(--fs-sm); }
+.quick-btn small{ font-size:var(--fs-xs); color:var(--color-text-muted); }
+
+/* Primeros pasos: sí es una secuencia, por eso va numerada con marcas de avance */
+.setup-steps{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--space-2); }
+.setup-steps li{ display:flex; align-items:center; gap:var(--space-3); }
+.setup-steps div{ display:flex; flex-direction:column; }
+.setup-steps strong{ font-size:var(--fs-sm); color:var(--color-text); }
+.setup-steps div span{ font-size:var(--fs-xs); color:var(--color-text-muted); }
+.setup-mark{
+  width:26px; height:26px; flex-shrink:0; border-radius:50%; border:2px solid var(--color-border);
+  display:flex; align-items:center; justify-content:center; font-size:.8rem; font-weight:700;
+}
+.setup-steps li.is-done .setup-mark{ background:var(--color-success); border-color:var(--color-success); color:#0b1a14; }
+.setup-steps li.is-done strong{ text-decoration:line-through; color:var(--color-text-muted); }
+
+@media (max-width: 560px){
+  .quick-grid{ grid-template-columns:1fr; }
+  .quick-btn{ flex-direction:row; align-items:center; gap:var(--space-3); flex-wrap:wrap; }
+  .quick-btn small{ flex-basis:100%; margin-left:calc(1.4rem + var(--space-3)); margin-top:-4px; }
+  .today-head h2{ font-size:var(--fs-lg); }
+}

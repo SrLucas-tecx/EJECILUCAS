@@ -197,5 +197,5 @@ const Nutrition = (() => {
     });
   }
 
-  return { logsOf, logOfDate, totals, renderPage };
+  return { logsOf, logOfDate, totals, renderPage, openMealModal };
 })();

@@ -15,6 +15,18 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.addEventListener('click', () => UI.switchTab(btn.dataset.tab));
   });
 
+  // Barra inferior (móvil): mismas pestañas, y "Más" abre el menú lateral
+  document.querySelectorAll('.bn-item[data-tab]').forEach(btn => {
+    btn.addEventListener('click', () => UI.switchTab(btn.dataset.tab));
+  });
+  document.getElementById('bn-more').addEventListener('click', () => {
+    document.querySelector('.app-layout').classList.add('sidebar-open');
+  });
+  // Mantiene resaltada la pestaña activa en la barra inferior
+  State.on('tab:changed', tab => {
+    document.querySelectorAll('.bn-item[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  });
+
   // Selector de cliente activo (equivalente al selector de bazar activo)
   document.getElementById('client-select-global').addEventListener('change', e => {
     Clients.switchClient(e.target.value);

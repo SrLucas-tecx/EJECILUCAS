@@ -56,7 +56,38 @@ const UI = (() => {
       : `<span class="text-muted">Sin cliente activo</span>`;
   }
 
-  /* ---------------- Dashboard ---------------- */
+  /* ---------------- Dashboard ("Hoy") ---------------- */
+
+  // Qué toca entrenar ahora: el día que sigue al último entrenamiento registrado
+  // (en la misma rutina). Sin historial, el primer día con ejercicios de la primera rutina.
+  function nextWorkout(client) {
+    const routines = Routines.all(client.id).filter(r => r.days.some(d => d.exercises.length));
+    if (!routines.length) return null;
+    const logs = Routines.logsOf(client.id).slice()
+      .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || '').localeCompare(a.createdAt || ''));
+    const last = logs.find(l => routines.some(r => r.id === l.routineId));
+    if (last) {
+      const r = routines.find(x => x.id === last.routineId);
+      const idx = r.days.findIndex(d => d.id === last.dayId);
+      for (let step = 1; step <= r.days.length; step++) {
+        const d = r.days[(idx + step) % r.days.length];
+        if (d.exercises.length) return { routine: r, day: d };
+      }
+    }
+    const r = routines[0];
+    return { routine: r, day: r.days.find(d => d.exercises.length) };
+  }
+
+  function setupSteps(done) {
+    const steps = [
+      ['Crea una rutina', 'Elige los ejercicios de cada día.', done.routine],
+      ['Registra el primer entrenamiento', 'Anota peso y repeticiones de cada serie.', done.workout],
+      ['Anota el peso corporal', 'Así podrás ver el progreso mes a mes.', done.weight]
+    ];
+    return `<ol class="setup-steps">${steps.map(([t, d, ok]) => `
+      <li class="${ok ? 'is-done' : ''}"><span class="setup-mark">${ok ? '✓' : ''}</span>
+        <div><strong>${t}</strong><span>${d}</span></div></li>`).join('')}</ol>`;
+  }
 
   function renderDashboard(container) {
     const client = State.getActiveClient();
@@ -73,6 +104,14 @@ const UI = (() => {
             <button class="btn-primary" onclick="Clients.createClient()">+ Agregar tu primer cliente</button>
           </div>
         </div>
+        <div class="chart-card" style="margin-top:var(--space-4);">
+          <h4>Para empezar</h4>
+          <ol class="setup-steps">
+            <li><span class="setup-mark"></span><div><strong>Agrega un cliente</strong><span>Con su nombre y objetivo principal.</span></div></li>
+            <li><span class="setup-mark"></span><div><strong>Crea su rutina</strong><span>Elige los ejercicios de la biblioteca.</span></div></li>
+            <li><span class="setup-mark"></span><div><strong>Registra sus entrenamientos</strong><span>Y mira cómo avanza cada mes.</span></div></li>
+          </ol>
+        </div>
         <div class="stat-cards" style="margin-top:var(--space-4);">
           <div class="stat-card"><span>Clientes</span><strong>${totalClients}</strong></div>
           <div class="stat-card"><span>Ejercicios en biblioteca</span><strong>${totalExercises}</strong></div>
@@ -81,28 +120,61 @@ const UI = (() => {
       return;
     }
 
+    const today = Utils.todayISO();
     const progressLogs = Progress.logsOf(client.id);
     const last = progressLogs[progressLogs.length - 1];
-    const nutriLog = Nutrition.logOfDate(client.id, Utils.todayISO());
+    const nutriLog = Nutrition.logOfDate(client.id, today);
     const kcalToday = Nutrition.totals(nutriLog).kcal;
     const routines = Routines.all(client.id);
-    const recentWorkouts = Routines.logsOf(client.id).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
+    const allWorkouts = Routines.logsOf(client.id);
+    const recentWorkouts = allWorkouts.slice().sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
+    const trainedToday = allWorkouts.some(w => w.date === today);
+    const next = nextWorkout(client);
+    const setupDone = { routine: routines.length > 0, workout: allWorkouts.length > 0, weight: progressLogs.length > 0 };
+    const setupComplete = setupDone.routine && setupDone.workout && setupDone.weight;
+
+    const ctaTitle = next
+      ? (trainedToday ? 'Ya entrenaste hoy ✓' : 'Entrenar hoy')
+      : 'Crea la primera rutina';
+    const ctaSub = next
+      ? `${Utils.escapeHtml(next.routine.name)} · ${Utils.escapeHtml(next.day.name)}${trainedToday ? ' — registrar otra sesión' : ''}`
+      : `Para empezar a registrar entrenamientos de ${Utils.escapeHtml(client.name)}`;
 
     container.innerHTML = `
       ${Backup.reminderBanner()}
-      <div class="hero-card hero-card-client">
-        <div class="avatar avatar-lg">${Utils.initials(client.name)}</div>
-        <div>
-          <h2>${Utils.escapeHtml(client.name)}</h2>
-          <p class="text-muted">${client.goal || 'Sin objetivo definido'} · Cliente desde ${Utils.formatDate(client.startDate)}</p>
+      <section class="today-card">
+        <div class="today-head">
+          <div class="avatar avatar-lg">${Utils.initials(client.name)}</div>
+          <div>
+            <p class="today-date">Hoy, ${Utils.formatDate(today, { withYear: false })}</p>
+            <h2>${Utils.escapeHtml(client.name)}</h2>
+            <p class="text-muted">${client.goal || 'Sin objetivo definido'} · Cliente desde ${Utils.formatDate(client.startDate)}</p>
+          </div>
         </div>
+        <button type="button" class="today-cta ${trainedToday ? 'is-done' : ''}" id="dash-train">
+          <span class="today-cta-icon">🏋️</span>
+          <span class="today-cta-text"><strong>${ctaTitle}</strong><small>${ctaSub}</small></span>
+          <span class="today-cta-go" aria-hidden="true">›</span>
+        </button>
+      </section>
+
+      <div class="quick-grid">
+        <button type="button" class="quick-btn" id="dash-meal"><span>🍽️</span><strong>Registrar comida</strong><small>${kcalToday}${client.targetCalories ? ' / ' + client.targetCalories : ''} kcal hoy</small></button>
+        <button type="button" class="quick-btn" id="dash-weight"><span>⚖️</span><strong>Registrar peso</strong><small>${last ? 'Último: ' + Utils.toUnit(last.weight) + ' ' + Utils.unitLabel() : 'Aún sin registros'}</small></button>
+        <button type="button" class="quick-btn" id="dash-progress"><span>📊</span><strong>Ver progreso</strong><small>${progressLogs.length} registro${progressLogs.length === 1 ? '' : 's'}</small></button>
       </div>
+
+      ${setupComplete ? '' : `
+      <div class="chart-card" style="margin-top:var(--space-4);">
+        <h4>Primeros pasos con ${Utils.escapeHtml(client.name)}</h4>
+        ${setupSteps(setupDone)}
+      </div>`}
 
       <div class="stat-cards">
         <div class="stat-card"><span>Peso actual</span><strong>${last ? Utils.toUnit(last.weight) + ' ' + Utils.unitLabel() : 'Sin registros'}</strong></div>
         <div class="stat-card"><span>Kcal hoy</span><strong>${kcalToday}${client.targetCalories ? ' / ' + client.targetCalories : ''}</strong></div>
         <div class="stat-card"><span>Rutinas activas</span><strong>${routines.length}</strong></div>
-        <div class="stat-card"><span>Entrenamientos registrados</span><strong>${Routines.logsOf(client.id).length}</strong></div>
+        <div class="stat-card"><span>Entrenamientos registrados</span><strong>${allWorkouts.length}</strong></div>
       </div>
 
       <div class="dash-columns">
@@ -114,15 +186,26 @@ const UI = (() => {
               ? e.sets.reduce((total, set) => total + (Number(set.time) || 0), 0)
               : 0), 0);
             return `<li><strong>${Utils.formatDate(w.date, { withYear: false })}</strong> — ${Utils.toUnit(vol)} ${Utils.unitLabel()} de volumen${timedSeconds ? ` · ${timedSeconds} s en ejercicios por tiempo` : ''}</li>`;
-          }).join('')}</ul>` : `<p class="text-muted">Aún no hay entrenamientos registrados.</p>`}
+          }).join('')}</ul>` : `<p class="text-muted">Aún no hay entrenamientos. Toca "Entrenar hoy" para registrar el primero.</p>`}
         </div>
         <div class="chart-card">
           <h4>Evolución de peso</h4>
-          <div class="chart-canvas-box"><canvas id="dash-weight-chart"></canvas></div>
+          ${progressLogs.length
+            ? `<div class="chart-canvas-box"><canvas id="dash-weight-chart"></canvas></div>`
+            : `<p class="text-muted">Registra el peso de ${Utils.escapeHtml(client.name)} para ver aquí su evolución.</p>`}
         </div>
       </div>`;
 
     Backup.wireReminder(container, () => renderDashboard(container));
+
+    const refresh = () => renderDashboard(container);
+    container.querySelector('#dash-train').addEventListener('click', () => {
+      if (next) Routines.openLogger(next.routine.id, refresh, { dayId: next.day.id });
+      else Routines.openBuilder(null, refresh);
+    });
+    container.querySelector('#dash-meal').addEventListener('click', () => Nutrition.openMealModal(client.id, today, null, refresh));
+    container.querySelector('#dash-weight').addEventListener('click', () => Progress.openEntry(client.id, null, refresh));
+    container.querySelector('#dash-progress').addEventListener('click', () => switchTab('progreso'));
 
     if (progressLogs.length) {
       const canvas = document.getElementById('dash-weight-chart');
