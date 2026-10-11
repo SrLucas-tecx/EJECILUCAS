@@ -16,6 +16,7 @@ const Storage = (() => {
     clients: [],
     exercises: [],
     routines: [],
+    routineTemplates: [],      // plantillas de rutina guardadas por el usuario
     workoutLogs: [],
     nutritionLogs: [],
     progressLogs: []

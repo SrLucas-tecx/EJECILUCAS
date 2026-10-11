@@ -8,6 +8,7 @@
 const Routines = (() => {
 
   let copiedRoutine = null;
+  const TEMPO_RE = /^[0-9xX.]+(-[0-9xX.]+){2,3}$/;   // p. ej. 3-1-1 o 3-1-1-0
 
   function all(clientId) { return Storage.all('routines').filter(r => r.clientId === clientId); }
   function get(id) { return Storage.find('routines', id); }
@@ -243,6 +244,7 @@ const Routines = (() => {
         <p class="text-muted">Crea rutinas por día, asigna ejercicios y registra el entrenamiento real.</p></div>
         <div class="client-card-actions">
           ${copiedRoutine ? '<button class="btn-sm btn-secondary" id="rt-paste">📥 Pegar rutina copiada</button>' : ''}
+          <button class="btn-secondary" id="rt-mine">📚 Mis plantillas${Storage.all('routineTemplates').length ? ` (${Storage.all('routineTemplates').length})` : ''}</button>
           <button class="btn-secondary" id="rt-template">📐 Desde plantilla</button>
           <button class="btn-primary" id="rt-new">+ Nueva rutina</button>
         </div>
@@ -251,6 +253,7 @@ const Routines = (() => {
 
     container.querySelector('#rt-new').addEventListener('click', () => openBuilder(null, () => renderPage(container)));
     container.querySelector('#rt-template').addEventListener('click', () => Templates.openWizard(() => renderPage(container)));
+    container.querySelector('#rt-mine').addEventListener('click', () => Templates.openMine(() => renderPage(container)));
     const pasteButton = container.querySelector('#rt-paste');
     if (pasteButton) pasteButton.addEventListener('click', () => pasteRoutine(container));
     const list = container.querySelector('#rt-list');
@@ -264,6 +267,7 @@ const Routines = (() => {
       card.querySelector('[data-act="log"]').addEventListener('click', () => openLogger(id, () => renderPage(container)));
       card.querySelector('[data-act="history"]').addEventListener('click', () => openHistory(id, () => renderPage(container)));
       card.querySelector('[data-act="pdf"]').addEventListener('click', () => exportPDF(get(id)));
+      card.querySelector('[data-act="save-template"]').addEventListener('click', () => Templates.saveFromRoutine(id, () => renderPage(container)));
       card.querySelector('[data-act="delete"]').addEventListener('click', () => {
         UI.confirm('¿Eliminar esta rutina?', () => {
           Storage.remove('routines', id);
@@ -290,6 +294,7 @@ const Routines = (() => {
         <button class="btn-sm btn-primary" data-act="log">🏋️ Registrar entrenamiento</button>
         <button class="btn-sm btn-secondary" data-act="history">📜 Historial</button>
         <button class="btn-sm btn-secondary" data-act="pdf">📄 PDF</button>
+        <button class="btn-sm btn-secondary" data-act="save-template">📚 Guardar plantilla</button>
         <button class="btn-icon-sm" data-act="delete" title="Eliminar">🗑️</button>
       </div>
     </article>`;
@@ -388,6 +393,13 @@ const Routines = (() => {
         doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(20);
         doc.text(`${meta ? meta.name : '(ejercicio eliminado)'}${uni ? ' (unilateral)' : ''}`, margin, y);
         y += 5;
+        const restSecs = restFor(ex.exerciseId, ex);
+        const planBits = [ex.tempo ? `Tempo ${ex.tempo}` : '', restSecs ? `Descanso ${restFmt(restSecs)}` : ''].filter(Boolean);
+        if (planBits.length) {
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(110);
+          doc.text(planBits.join('   -   '), margin, y);
+          y += 4.5;
+        }
 
         const metricLabel = meta?.measureByTime ? 'Tiempo (seg)' : 'Reps meta';
         const cols = uni
@@ -439,7 +451,7 @@ const Routines = (() => {
     const draft = editing ? JSON.parse(JSON.stringify(editing))
       : initialDraft ? JSON.parse(JSON.stringify(initialDraft))
       : { clientId: client.id, name: '', notes: '', days: [newDay('Día 1')] };
-    const savedWeightUnit = editing?.targetWeightUnit;
+    const savedWeightUnit = editing?.targetWeightUnit ?? initialDraft?.targetWeightUnit;
     const builderState = {
       activeDayIndex: 0,
       volOpen: false,
@@ -466,6 +478,9 @@ const Routines = (() => {
         draft.notes = bodyHost.querySelector('#rt-notes').value.trim();
         draft.targetWeightUnit = builderState.weightUnit;
         if (!draft.days.some(d => d.exercises.length)) { Utils.toast('Agrega al menos un ejercicio', 'danger'); return false; }
+        if (draft.days.some(d => d.exercises.some(e => e.tempo && !TEMPO_RE.test(e.tempo)))) {
+          Utils.toast('El tempo se escribe con números y guiones, por ejemplo 3-1-1', 'danger'); return false;
+        }
         if (editing) Storage.update('routines', editing.id, draft);
         else Storage.insert('routines', draft);
         Utils.toast('Rutina guardada', 'success');
@@ -534,6 +549,15 @@ const Routines = (() => {
         <h4>${meta ? Utils.escapeHtml(meta.name) : '(ejercicio eliminado)'}${uni ? ' <span class="chip">🔁 Unilateral</span>' : ''}${bwEx ? ' <span class="chip">🧍 Peso corporal</span>' : ''}${timed ? ' <span class="chip">⏱️ Por tiempo</span>' : ''}</h4>
         ${unitSeg(unit)}
         <button type="button" class="btn-icon-sm rt-ex-remove" data-i="${dayI}" data-j="${exI}" title="Quitar ejercicio">🗑️</button>
+      </div>
+      <div class="rt-ex-meta">
+        <label class="field"><span>${Help.term('tempo', 'Tempo')} (bajada-pausa-subida, seg)</span>
+          <input type="text" class="rt-ex-tempo" data-i="${dayI}" data-j="${exI}" value="${Utils.escapeHtml(ex.tempo || '')}" placeholder="3-1-1" maxlength="9" autocomplete="off"></label>
+        <label class="field"><span>${Help.term('descanso', 'Descanso')} entre series</span>
+          <select class="rt-ex-rest" data-i="${dayI}" data-j="${exI}">
+            <option value="">Automático (${restFmt(autoRest(ex.exerciseId))})</option>
+            ${[60, 90, 120, 150, 180, 240].map(v => `<option value="${v}" ${Number(ex.restSeconds) === v ? 'selected' : ''}>${restFmt(v)}</option>`).join('')}
+          </select></label>
       </div>
       <table class="table-compact">
         <thead><tr><th>Serie</th>${uni ? '<th class="col-side">Lado</th>' : ''}<th>${timed ? 'Tiempo meta (seg)' : 'Reps meta'}</th><th>${bwEx ? `Extra meta (${unit})` : `Peso meta (${unit})`}</th><th>${Help.term('rir', 'Reserva meta')}</th><th></th></tr></thead>
@@ -656,6 +680,16 @@ const Routines = (() => {
         : e.target.value;
     }));
 
+    host.querySelectorAll('.rt-ex-tempo').forEach(inp => inp.addEventListener('input', e => {
+      const ex = draft.days[e.target.dataset.i].exercises[e.target.dataset.j];
+      const v = e.target.value.trim();
+      if (v) ex.tempo = v; else delete ex.tempo;
+    }));
+    host.querySelectorAll('.rt-ex-rest').forEach(sel => sel.addEventListener('change', e => {
+      const ex = draft.days[e.target.dataset.i].exercises[e.target.dataset.j];
+      if (e.target.value) ex.restSeconds = Number(e.target.value); else delete ex.restSeconds;
+    }));
+
     host.querySelectorAll('.rt-set-side').forEach(sel => sel.addEventListener('change', e => {
       const i = e.target.dataset.i, j = e.target.dataset.j, k = e.target.dataset.k;
       const ex = draft.days[i].exercises[j];
@@ -705,7 +739,18 @@ const Routines = (() => {
 
   const rest = { end: 0, timer: null, notified: false };
 
-  function restSeconds() { return Number(Storage.get().settings.restSeconds ?? 90) || 0; }
+  // Descanso general (Ajustes): -1 = automático según el ejercicio, 0 = sin temporizador, o segundos fijos.
+  // Compuestos pesados: 2 a 3 min (se sugieren 2:30). Aislamiento: 60 a 90 s (se sugieren 1:15).
+  const REST_AUTO = { compuesto: 150, aislamiento: 75 };
+  function restSetting() { const v = Storage.get().settings.restSeconds; return v == null ? -1 : Number(v); }
+  function autoRest(exerciseId) { return REST_AUTO[Exercises.mechanicOf(Exercises.get(exerciseId))] || 90; }
+  // Segundos de descanso tras una serie de este ejercicio: el fijado en la rutina o, si no, el general
+  function restFor(exerciseId, routineEx) {
+    const own = routineEx && Number(routineEx.restSeconds) > 0 ? Number(routineEx.restSeconds) : 0;
+    if (own) return own;
+    const g = restSetting();
+    return g < 0 ? autoRest(exerciseId) : g;
+  }
   function restFmt(s) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 
   function restClear() {
@@ -752,9 +797,9 @@ const Routines = (() => {
     restPaint();
   }
 
-  function restStart() {
-    if (!restSeconds()) return;
-    rest.end = Date.now() + restSeconds() * 1000;
+  function restStart(seconds) {
+    if (!seconds) return;
+    rest.end = Date.now() + seconds * 1000;
     rest.notified = false;
     if (!rest.timer) rest.timer = setInterval(restTick, 500);
     restPaint();
@@ -897,8 +942,8 @@ const Routines = (() => {
           <label class="field"><span>Fecha</span><input type="date" id="log-date" value="${draft.date}"></label>
           <label class="field"><span>Duración (min)</span><input type="number" inputmode="numeric" id="log-minutes" value="${draft.minutes}" min="0"></label>
           <label class="field"><span>Descanso</span>
-            <select id="log-rest">${[[0, 'Sin temporizador'], [60, '1 min'], [90, '1:30 min'], [120, '2 min'], [180, '3 min']]
-              .map(([v, l]) => `<option value="${v}" ${restSeconds() === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+            <select id="log-rest">${[[-1, 'Automático (según el ejercicio)'], [0, 'Sin temporizador'], [60, '1 min'], [90, '1:30 min'], [120, '2 min'], [180, '3 min']]
+              .map(([v, l]) => `<option value="${v}" ${restSetting() === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
           <div class="field"><span>Unidad de peso</span>${unitSeg(unit, 'log-unit-seg')}</div>
         </div>
         <div class="field-inline">
@@ -927,6 +972,12 @@ const Routines = (() => {
             <h4>${meta ? Utils.escapeHtml(meta.name) : 'Ejercicio'}${uni ? ' <span class="chip">🔁 Unilateral</span>' : ''}${bwEx ? ' <span class="chip">🧍 Peso corporal</span>' : ''}${timed ? ' <span class="chip">⏱️ Por tiempo</span>' : ''}</h4>
             ${prior ? `<button type="button" class="btn-sm btn-secondary log-copy-prev" data-i="${i}">↺ Copiar última sesión</button>` : ''}
           </div>
+          ${(() => {
+            const secs = restFor(entry.exerciseId, routineEx);
+            const bits = [routineEx && routineEx.tempo ? `${Help.term('tempo', 'Tempo')} <strong>${Utils.escapeHtml(routineEx.tempo)}</strong>` : '',
+              secs ? `${Help.term('descanso', 'Descanso')} <strong>${restFmt(secs)}</strong>${routineEx && Number(routineEx.restSeconds) > 0 ? '' : ' (sugerido)'}` : ''].filter(Boolean);
+            return bits.length ? `<p class="log-prev-info">${bits.join(' · ')}</p>` : '';
+          })()}
           ${bwEx ? `<p class="log-prev-info">${timed
             ? 'Puedes anotar un lastre opcional; el resultado principal de este ejercicio se registra por tiempo.'
             : bwKg
@@ -997,7 +1048,12 @@ const Routines = (() => {
       st.done = !st.done;
       btn.classList.toggle('on', st.done);
       btn.closest('tr').classList.toggle('is-done', st.done);
-      if (st.done) restStart();
+      if (st.done) {
+        const entry = draft.entries[btn.dataset.i];
+        const day = routine.days.find(d => d.id === draft.dayId);
+        const rex = day && day.exercises.find(x => x.exerciseId === entry.exerciseId);
+        restStart(restFor(entry.exerciseId, rex));
+      }
     }));
     restPaint();
 
@@ -1191,6 +1247,6 @@ const Routines = (() => {
     });
   }
 
-  return { all, get, logsOf, normalizeTargetSets, renderPage, openBuilder, openLogger, openHistory,
+  return { all, get, logsOf, normalizeTargetSets, restFor, autoRest, renderPage, openBuilder, openLogger, openHistory,
            priorSession, bestBefore, prSetIndex, overloadHint, sideOf, bestSetEver };
 })();

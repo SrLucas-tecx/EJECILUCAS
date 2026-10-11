@@ -10,6 +10,7 @@ const Templates = (() => {
 
   /* ---------------- Reglas de hipertrofia ---------------- */
 
+  const DEFAULT_TEMPO = '3-1-1';   // bajada 3 s, pausa 1 s, subida 1 s
   const REPS = { compuesto: '6-10', aislamiento: '10-15', aislamientoAmplio: '12-20' };
   // Músculos que toleran bien rangos altos de repeticiones (deltoide lateral y pantorrillas)
   const WIDE_RANGE = ['hombro-lateral', 'pantorrillas'];
@@ -84,6 +85,63 @@ const Templates = (() => {
 
   const DAY_OPTIONS = [2, 3, 4, 5, 6];
   const forDays = n => TEMPLATES.filter(t => t.days.length === n);
+
+  /* ---------------- Énfasis (especialización) ----------------
+     Sube el volumen de una zona sobre la plantilla base: primero suma series a los ejercicios que ya
+     tiene, y si hace falta agrega un ejercicio de aislamiento. Reparte entre los días en que ya se
+     trabaja (mínimo 2 días si hay opción) y nunca pasa de SESSION_CAP series del mismo músculo por sesión. */
+
+  const SESSION_CAP = 8;
+  const TARGET_LARGE = 18;   // series efectivas por semana buscadas en un músculo grande con énfasis
+  const TARGET_SMALL = 13;
+  const TARGET_OVERRIDE = { gluteos: 12, oblicuos: 8 };   // el glúteo recibe mucho trabajo indirecto de las sentadillas y los pesos muertos   // series directas por semana buscadas en un músculo pequeño con énfasis
+
+  const EMPHASIS = {
+    pecho:   { label: 'Pecho',    muscles: ['pecho'],                                   hint: 'Más series de pecho, repartidas entre sus días.' },
+    espalda: { label: 'Espalda',  muscles: ['espalda'],                                 hint: 'Más series de espalda (dorsales y remos).' },
+    hombros: { label: 'Hombros',  muscles: ['hombro-lateral', 'hombro-posterior'],      hint: 'Más deltoides lateral y posterior; el frontal ya trabaja con los presses.' },
+    brazos:  { label: 'Brazos',   muscles: ['biceps', 'triceps'],                       hint: 'Más bíceps y tríceps.' },
+    gluteos: { label: 'Glúteos',  muscles: ['gluteos'],                                 hint: 'Más series de glúteo.' },
+    pierna:  { label: 'Pierna',   muscles: ['cuadriceps', 'isquiotibiales', 'pantorrillas'], hint: 'Más cuádriceps, isquiotibiales y pantorrillas.' },
+    core:    { label: 'Core',     muscles: ['abdomen', 'oblicuos'],                     hint: 'Más abdomen y oblicuos.' }
+  };
+
+  function applyEmphasis(tpl, key) {
+    const em = EMPHASIS[key];
+    if (!em) return tpl;
+    const days = tpl.days.map(d => ({ ...d, slots: d.slots.map(s => ({ ...s })) }));
+    const dayTotal = d => d.slots.reduce((n, s) => n + s.sets, 0);
+
+    em.muscles.forEach(m => {
+      const inDay = d => d.slots.filter(s => s.muscle === m).reduce((n, s) => n + s.sets, 0);
+      const week = () => days.reduce((n, d) => n + inDay(d), 0);
+      let need = (TARGET_OVERRIDE[m] || (MuscleMap.isLarge(m) ? TARGET_LARGE : TARGET_SMALL)) - week();
+      if (need <= 0) return;
+
+      const pool = days.filter(d => inDay(d) > 0);
+      while (pool.length < 2 && pool.length < days.length) {   // mínimo 2 días de frecuencia, si la plantilla los tiene
+        const other = days.filter(d => !pool.includes(d)).sort((a, b) => dayTotal(a) - dayTotal(b))[0];
+        pool.push(other);
+      }
+      for (let guard = 0; need > 0 && guard < 100; guard++) {
+        let placed = false;
+        pool.sort((a, b) => inDay(a) - inDay(b));
+        for (const d of pool) {
+          if (need <= 0) break;
+          if (inDay(d) >= SESSION_CAP) continue;
+          const slot = d.slots.filter(s => s.muscle === m && s.sets < 5).sort((a, b) => a.sets - b.sets)[0];
+          if (slot) { slot.sets++; need--; placed = true; continue; }
+          const sets = Math.min(3, need, SESSION_CAP - inDay(d));
+          d.slots.push({ muscle: m, mech: 'aislamiento', sets });
+          need -= sets; placed = true;
+        }
+        if (!placed) break;
+      }
+    });
+
+    return { ...tpl, id: `${tpl.id}+${key}`, name: `${tpl.name} · énfasis en ${em.label.toLowerCase()}`,
+             description: `${tpl.description} Énfasis en ${em.label.toLowerCase()}: series extra repartidas entre sus días, sin pasar de ${SESSION_CAP} por sesión.`, days };
+  }
 
   /* ---------------- Equipo y prioridad de ejercicios ---------------- */
 
@@ -188,11 +246,11 @@ const Templates = (() => {
     return {
       clientId,
       name,
-      notes: `Plantilla: ${plan.template.name}. Compuestos de 6 a 10 repeticiones con 1 a 3 en reserva; aislamiento de 10 a 15 (hasta 20 en hombro lateral y pantorrillas), con las últimas series al fallo. Descanso: 2 a 3 min en compuestos y 60 a 90 s en aislamiento.`,
+      notes: `Plantilla: ${plan.template.name}. Compuestos de 6 a 10 repeticiones con 1 a 3 en reserva; aislamiento de 10 a 15 (hasta 20 en hombro lateral y pantorrillas), con las últimas series al fallo. Tempo ${DEFAULT_TEMPO} (bajada, pausa, subida). Descanso: 2 a 3 min en compuestos y 60 a 90 s en aislamiento.`,
       days: plan.days.filter(d => d.exercises.length).map(d => ({
         id: Utils.uid('day'),
         name: d.name,
-        exercises: d.exercises.map(e => ({ exerciseId: e.exercise.id, targetSets: e.targetSets }))
+        exercises: d.exercises.map(e => ({ exerciseId: e.exercise.id, targetSets: e.targetSets, tempo: DEFAULT_TEMPO }))
       }))
     };
   }
@@ -246,14 +304,15 @@ const Templates = (() => {
     const client = State.getActiveClient();
     if (!client) { Utils.toast('Elige o crea un cliente primero', 'danger'); return; }
 
-    const st = { days: 4, templateId: null, equipment: 'gym', priority: 'principiante', name: '', nameTouched: false };
+    const st = { days: 4, templateId: null, emphasis: '', equipment: 'gym', priority: 'principiante', name: '', nameTouched: false };
     const host = document.createElement('div');
     let plan = null;
 
     const paint = () => {
       const list = forDays(st.days);
       if (!list.some(t => t.id === st.templateId)) st.templateId = list[0].id;
-      const tpl = list.find(t => t.id === st.templateId);
+      const base = list.find(t => t.id === st.templateId);
+      const tpl = applyEmphasis(base, st.emphasis);
       if (!st.nameTouched) st.name = `${tpl.name} - ${client.name}`;
       plan = build(tpl, { equipment: st.equipment, priority: st.priority });
 
@@ -273,7 +332,16 @@ const Templates = (() => {
         </section>
 
         <section class="tpl-section">
-          <h4>3. Equipo disponible</h4>
+          <h4>3. ¿Quieres darle énfasis a una zona? (opcional)</h4>
+          <div class="mf-group-items">
+            ${[['', 'Sin énfasis'], ...Object.entries(EMPHASIS).map(([k, e]) => [k, e.label])]
+              .map(([k, l]) => `<button type="button" class="mf-chip ${k === st.emphasis ? 'active' : ''}" data-group="emphasis" data-v="${k}" aria-pressed="${k === st.emphasis}">${l}</button>`).join('')}
+          </div>
+          <p class="text-muted" style="font-size:var(--fs-xs); margin:6px 0 0;">${st.emphasis ? esc(EMPHASIS[st.emphasis].hint) : 'Agrega series extra a la zona que quieres priorizar, repartidas entre sus días y sin pasar de 8 series por sesión.'}</p>
+        </section>
+
+        <section class="tpl-section">
+          <h4>4. Equipo disponible</h4>
           <div class="seg tpl-seg" role="group" aria-label="Equipo disponible">
             ${Object.entries(EQUIPMENT_PROFILES).map(([k, p]) => `<button type="button" class="seg-btn ${k === st.equipment ? 'active' : ''}" data-group="equipment" data-v="${k}">${p.label}</button>`).join('')}
           </div>
@@ -281,7 +349,7 @@ const Templates = (() => {
         </section>
 
         <section class="tpl-section">
-          <h4>4. ¿Qué ejercicios priorizar?</h4>
+          <h4>5. ¿Qué ejercicios priorizar?</h4>
           <div class="tpl-choices">${Object.entries(PRIORITIES).map(([k, p]) => choice('priority', k, p.label, p.hint, k === st.priority)).join('')}</div>
         </section>
 
@@ -299,6 +367,7 @@ const Templates = (() => {
         const g = btn.dataset.group, v = btn.dataset.v;
         if (g === 'days') { st.days = Number(v); st.templateId = null; }
         if (g === 'template') st.templateId = v;
+        if (g === 'emphasis') st.emphasis = v;
         if (g === 'equipment') st.equipment = v;
         if (g === 'priority') st.priority = v;
         paint();
@@ -322,5 +391,129 @@ const Templates = (() => {
     });
   }
 
-  return { TEMPLATES, EQUIPMENT_PROFILES, PRIORITIES, build, openWizard };
+  /* ---------------- Mis plantillas (guardadas por el usuario) ---------------- */
+
+  const clone = v => JSON.parse(JSON.stringify(v));
+  const countEx = t => t.days.reduce((n, d) => n + d.exercises.length, 0);
+
+  // Guarda una rutina como plantilla reutilizable para cualquier cliente
+  function saveFromRoutine(routineId, onDone) {
+    const r = Routines.get(routineId);
+    if (!r) return;
+    UI.openModal({
+      title: '📚 Guardar como plantilla',
+      body: `
+        <p class="text-muted" style="font-size:var(--fs-sm);">La plantilla guarda los días, ejercicios, series, reservas, tempo y descanso. Después la podrás usar para cualquier cliente.</p>
+        <label class="field"><span>Nombre de la plantilla</span><input type="text" id="mt-name" maxlength="60" value="${esc(r.name)}"></label>
+        <label class="field" style="margin-top:var(--space-3);"><span>Descripción (opcional)</span>
+          <textarea id="mt-desc" rows="2" placeholder="Para quién es, qué busca, notas..."></textarea></label>
+        <label class="section-check" style="margin-top:var(--space-3);">
+          <input type="checkbox" id="mt-weights"><span>Conservar los pesos meta <small style="display:block;font-weight:400;">Si no, la plantilla queda sin pesos y cada cliente pone los suyos.</small></span>
+        </label>`,
+      confirmLabel: 'Guardar plantilla',
+      onConfirm: () => {
+        const name = document.getElementById('mt-name').value.trim();
+        if (!name) { Utils.toast('Ponle nombre a la plantilla', 'danger'); return false; }
+        const keep = document.getElementById('mt-weights').checked;
+        Storage.insert('routineTemplates', {
+          name,
+          description: document.getElementById('mt-desc').value.trim() || r.notes || '',
+          targetWeightUnit: r.targetWeightUnit || null,
+          days: r.days.map(d => ({
+            id: Utils.uid('day'), name: d.name,
+            exercises: d.exercises.map(e => {
+              const out = { exerciseId: e.exerciseId, targetSets: Routines.normalizeTargetSets(e).map(st => ({ ...st, weight: keep ? st.weight : '' })) };
+              if (e.tempo) out.tempo = e.tempo;
+              if (e.restSeconds) out.restSeconds = e.restSeconds;
+              return out;
+            })
+          }))
+        });
+        Utils.toast('Plantilla guardada', 'success');
+        onDone && onDone();
+      }
+    });
+    setTimeout(() => { const i = document.getElementById('mt-name'); if (i) i.select(); }, 50);
+  }
+
+  function draftFromSaved(t, client) {
+    const days = clone(t.days).map(d => ({
+      ...d, id: Utils.uid('day'),
+      exercises: d.exercises.filter(e => Exercises.get(e.exerciseId))   // se omiten ejercicios que ya no existen
+    }));
+    return { clientId: client.id, name: `${t.name} - ${client.name}`, notes: t.description || '', targetWeightUnit: t.targetWeightUnit || undefined, days };
+  }
+
+  function openMine(onDone) {
+    const client = State.getActiveClient();
+    if (!client) { Utils.toast('Elige o crea un cliente primero', 'danger'); return; }
+    const host = document.createElement('div');
+
+    const paint = () => {
+      const list = Storage.all('routineTemplates').slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+      host.innerHTML = list.length ? `
+        <p class="text-muted" style="font-size:var(--fs-sm);">Plantillas que guardaste. "Usar" las abre en el constructor para ${esc(client.name)}, donde puedes cambiar lo que quieras antes de guardar.</p>
+        <div class="mgr-list">${list.map(t => `
+          <div class="mgr-group" data-id="${esc(t.id)}">
+            <div class="mgr-group-head">
+              <h4>${esc(t.name)}</h4>
+              <div class="mgr-group-actions">
+                <button type="button" class="btn-sm btn-primary" data-act="use">Usar</button>
+                <button type="button" class="btn-icon-sm" data-act="rename" title="Renombrar" aria-label="Renombrar plantilla">✏️</button>
+                <button type="button" class="btn-icon-sm" data-act="delete" title="Eliminar" aria-label="Eliminar plantilla">🗑️</button>
+              </div>
+            </div>
+            <div class="chip-row"><span class="chip">${t.days.length} día${t.days.length === 1 ? '' : 's'}</span><span class="chip">${countEx(t)} ejercicios</span>
+              ${t.days.map(d => `<span class="chip">${esc(d.name)}</span>`).join('')}</div>
+            ${t.description ? `<p class="text-muted" style="font-size:var(--fs-xs); margin:0;">${esc(t.description)}</p>` : ''}
+          </div>`).join('')}</div>`
+        : `<div class="empty-state"><span class="empty-icon">📚</span><h3>Aún no tienes plantillas propias</h3>
+            <p>En la lista de rutinas, usa "📚 Guardar plantilla" en una rutina que te haya funcionado para reutilizarla con otros clientes.</p></div>`;
+    };
+
+    host.addEventListener('click', e => {
+      const btn = e.target.closest('[data-act]');
+      if (!btn) return;
+      const id = btn.closest('[data-id]').dataset.id;
+      const t = Storage.find('routineTemplates', id);
+      if (!t) return;
+      if (btn.dataset.act === 'use') {
+        const draft = draftFromSaved(t, client);
+        if (!draft.days.some(d => d.exercises.length)) { Utils.toast('A esta plantilla ya no le quedan ejercicios en la biblioteca', 'danger'); return; }
+        UI.closeModal();
+        setTimeout(() => Routines.openBuilder(null, onDone, draft), 0);
+      }
+      if (btn.dataset.act === 'rename') {
+        UI.openModal({
+          title: 'Renombrar plantilla',
+          body: `<label class="field"><span>Nombre</span><input type="text" id="mt-rename" maxlength="60" value="${esc(t.name)}"></label>`,
+          confirmLabel: 'Guardar',
+          onConfirm: () => {
+            const name = document.getElementById('mt-rename').value.trim();
+            if (!name) { Utils.toast('Escribe un nombre', 'danger'); return false; }
+            Storage.update('routineTemplates', id, { name });
+            paint();
+          }
+        });
+      }
+      if (btn.dataset.act === 'delete') {
+        UI.confirm(`¿Eliminar la plantilla "${esc(t.name)}"? Las rutinas que ya creaste con ella no se tocan.`, () => {
+          Storage.remove('routineTemplates', id);
+          Utils.toast('Plantilla eliminada', 'info');
+          paint();
+        });
+      }
+    });
+
+    UI.openModal({
+      title: '📚 Mis plantillas',
+      bodyEl: host,
+      wide: true,
+      hideFooter: true,
+      onOpen: paint,
+      onClose: () => { if (onDone) onDone(); }
+    });
+  }
+
+  return { TEMPLATES, EMPHASIS, EQUIPMENT_PROFILES, PRIORITIES, build, applyEmphasis, openWizard, saveFromRoutine, openMine };
 })();

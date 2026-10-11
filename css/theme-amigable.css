@@ -500,3 +500,13 @@ input.switch:checked::after{ transform:translateX(20px); }
   .vol-nums{ grid-row:1; grid-column:2; }
 }
 
+
+/* ==========================================================================
+   TEMPO Y DESCANSO POR EJERCICIO · MIS PLANTILLAS — Sprints 5 y 6
+   ========================================================================== */
+.rt-ex-meta{ display:grid; grid-template-columns:1fr 1fr; gap:var(--space-2); margin:var(--space-2) 0; }
+.rt-ex-meta .field input, .rt-ex-meta .field select{ width:100%; }
+.mgr-list .mgr-group{ display:flex; flex-direction:column; gap:var(--space-2); }
+@media (max-width: 560px){
+  .rt-ex-meta{ grid-template-columns:1fr; }
+}

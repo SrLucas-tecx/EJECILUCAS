@@ -15,6 +15,7 @@ const Backup = (() => {
     clients:       { label: 'Clientes',                         kind: 'array',  deps: [] },
     exercises:     { label: 'Biblioteca de ejercicios',         kind: 'array',  deps: ['settings'] },
     routines:      { label: 'Rutinas',                          kind: 'array',  deps: ['clients', 'exercises'] },
+    routineTemplates: { label: 'Plantillas de rutina',          kind: 'array',  deps: ['exercises'] },
     workoutLogs:   { label: 'Entrenamientos registrados',       kind: 'array',  deps: ['clients', 'routines', 'exercises'] },
     nutritionLogs: { label: 'Alimentación',                     kind: 'array',  deps: ['clients'] },
     progressLogs:  { label: 'Progreso (medidas y fotos)',       kind: 'array',  deps: ['clients'] },
@@ -34,6 +35,7 @@ const Backup = (() => {
     clients:       r => typeof r.name === 'string',
     exercises:     r => typeof r.name === 'string' && Array.isArray(r.muscles),
     routines:      r => Array.isArray(r.days) && r.days.every(d => isObj(d) && Array.isArray(d.exercises)),
+    routineTemplates: r => typeof r.name === 'string' && Array.isArray(r.days) && r.days.every(d => isObj(d) && Array.isArray(d.exercises)),
     workoutLogs:   r => typeof r.date === 'string' && Array.isArray(r.entries) && r.entries.every(e => isObj(e) && Array.isArray(e.sets)),
     nutritionLogs: r => typeof r.date === 'string' && Array.isArray(r.meals) && r.meals.every(m => isObj(m) && Array.isArray(m.items)),
     progressLogs:  r => typeof r.date === 'string'
@@ -372,6 +374,7 @@ const Backup = (() => {
     if (Object.keys(idMap).length) {
       const remap = id => idMap[id] || id;
       (json.routines || []).forEach(r => (r.days || []).forEach(d => (d.exercises || []).forEach(e => { e.exerciseId = remap(e.exerciseId); })));
+      (json.routineTemplates || []).forEach(r => (r.days || []).forEach(d => (d.exercises || []).forEach(e => { e.exerciseId = remap(e.exerciseId); })));
       (json.workoutLogs || []).forEach(l => (l.entries || []).forEach(e => { e.exerciseId = remap(e.exerciseId); }));
     }
 

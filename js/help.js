@@ -84,6 +84,15 @@ const Help = (() => {
       name: 'Tamaño del músculo',
       text: 'Los músculos grandes (pecho, espalda, cuádriceps, glúteos, isquiotibiales) toleran más volumen: de 12 a 20 series por semana. Los pequeños (bíceps, tríceps, hombros, pantorrillas) se trabajan con 8 a 15. Las plantillas usan este dato para marcar si el volumen es adecuado.'
     },
+    tempo: {
+      name: 'Tempo (cadencia)',
+      text: 'Cuánto dura cada fase de la repetición, en segundos: bajada (excéntrica) - pausa abajo - subida. Se escribe con guiones.',
+      example: '3-1-1 = bajas en 3 segundos, pausas 1 segundo en el punto de más estiramiento y subes en 1 segundo.'
+    },
+    descanso: {
+      name: 'Descanso entre series',
+      text: 'Compuestos pesados: de 2 a 3 minutos, para recuperar fuerza. Aislamiento: de 60 a 90 segundos. En "Automático" la app sugiere 2:30 para compuestos y 1:15 para aislamiento; puedes fijar otro tiempo por ejercicio.'
+    },
     mev: {
       name: 'Mínimo efectivo (MEV)',
       text: 'Las series semanales mínimas por músculo para empezar a ver adaptaciones: unas 10. Por debajo de eso, el estímulo suele ser insuficiente para crecer.'
