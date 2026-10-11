@@ -311,7 +311,7 @@ const Progress = (() => {
         ? [{ label: 'Mejor duración (segundos)', data: series.map(s => s.seconds), borderColor: '#5EEAD4', backgroundColor: hexToRgba('#5EEAD4', .12), fill: true, pointBackgroundColor: '#5EEAD4' }]
         : [
           { label: `Peso máx. usado (${unit})`, data: series.map(s => Utils.toUnit(s.maxWeight)), borderColor: '#5EEAD4', backgroundColor: hexToRgba('#5EEAD4', .12), fill: true, pointBackgroundColor: '#5EEAD4' },
-          { label: `1RM estimado (${unit})`, data: series.map(s => Utils.toUnit(s.est1RM)), borderColor: '#FF4B6E', backgroundColor: hexToRgba('#FF4B6E', .12), fill: true, pointBackgroundColor: '#FF4B6E' }
+          { label: `Máximo estimado en 1 rep (${unit})`, data: series.map(s => Utils.toUnit(s.est1RM)), borderColor: '#FF4B6E', backgroundColor: hexToRgba('#FF4B6E', .12), fill: true, pointBackgroundColor: '#FF4B6E' }
         ];
       canvas._chart = new Chart(canvas, {
         type: 'line',

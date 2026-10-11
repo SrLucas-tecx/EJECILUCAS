@@ -32,14 +32,181 @@ const MuscleMap = (() => {
     'pantorrillas':    { label: 'Pantorrillas', view: 'back' }
   };
 
-  function muscleLabel(id) { return MUSCLES[id]?.label || id; }
+  /* ---------------- Músculos y secciones editables ----------------
+     Los músculos de fábrica (MUSCLES) no se borran: se ocultan, renombran o se mueven de sección.
+     Lo que cambia el usuario vive en settings.bodyConfig (así viaja en los respaldos de "Ajustes"). */
 
-  // Agrupación para el selector por campos (en vez de tocar la silueta).
-  const MUSCLE_GROUPS = [
-    { label: '💪 Brazo y hombro', muscles: ['hombro-frontal', 'hombro-lateral', 'hombro-posterior', 'biceps', 'triceps', 'antebrazo'] },
-    { label: '🫀 Torso', muscles: ['pecho', 'espalda', 'trapecio', 'abdomen', 'oblicuos', 'espalda-baja'] },
-    { label: '🦵 Pierna', muscles: ['cuadriceps', 'isquiotibiales', 'gluteos', 'pantorrillas'] }
+  const BASE_GROUPS = [
+    { id: 'brazo-hombro', label: '💪 Brazo y hombro', muscles: ['hombro-frontal', 'hombro-lateral', 'hombro-posterior', 'biceps', 'triceps', 'antebrazo'] },
+    { id: 'torso', label: '🫀 Torso', muscles: ['pecho', 'espalda', 'trapecio', 'abdomen', 'oblicuos', 'espalda-baja'] },
+    { id: 'pierna', label: '🦵 Pierna', muscles: ['cuadriceps', 'isquiotibiales', 'gluteos', 'pantorrillas'] }
   ];
+  const BASE_ORDER = BASE_GROUPS.flatMap(g => g.muscles);
+  const BASE_LARGE = ['pecho', 'espalda', 'cuadriceps', 'gluteos', 'isquiotibiales'];
+  const SIZES = { grande: 'Grande', pequeno: 'Pequeño' };
+
+  const emptyCfg = () => ({ customMuscles: [], hiddenMuscles: [], labels: {}, groupOverrides: {}, sizes: {}, customGroups: [], groupLabels: {} });
+  const isPlain = v => v !== null && typeof v === 'object' && !Array.isArray(v);
+  const norm = s => String(s || '').trim().toLowerCase();
+  const baseGroupOf = id => (BASE_GROUPS.find(g => g.muscles.includes(id)) || {}).id || null;
+
+  // Lee la configuración (sin crearla). Con create=true la crea en settings para poder modificarla.
+  function cfg(create) {
+    let settings = null;
+    try { settings = Storage.get().settings; } catch (e) { /* la base todavía no carga */ }
+    if (!settings) return emptyCfg();
+    let c = settings.bodyConfig;
+    if (!isPlain(c)) { if (!create) return emptyCfg(); c = settings.bodyConfig = emptyCfg(); }
+    const base = emptyCfg();
+    Object.keys(base).forEach(k => {
+      if (Array.isArray(base[k]) ? !Array.isArray(c[k]) : !isPlain(c[k])) c[k] = base[k];
+    });
+    return c;
+  }
+  const persist = () => { try { Storage.save(); } catch (e) { /* sin base */ } };
+
+  function groupList() {
+    const c = cfg();
+    return BASE_GROUPS.map(g => ({ id: g.id, label: c.groupLabels[g.id] || g.label, builtin: true }))
+      .concat(c.customGroups.filter(g => g && g.id).map(g => ({ id: g.id, label: g.label, builtin: false })));
+  }
+
+  // Todos los músculos con su estado: { id, label, group, size, builtin, hidden }
+  function allMuscles() {
+    const c = cfg();
+    const hidden = new Set(c.hiddenMuscles);
+    const gids = new Set(groupList().map(g => g.id));
+    const fix = (g, id) => (gids.has(g) ? g : (baseGroupOf(id) || 'torso'));
+    const base = BASE_ORDER.concat(Object.keys(MUSCLES).filter(id => !BASE_ORDER.includes(id))).map(id => ({
+      id, builtin: true, hidden: hidden.has(id),
+      label: c.labels[id] || (MUSCLES[id] && MUSCLES[id].label) || id,
+      group: fix(c.groupOverrides[id] || baseGroupOf(id), id),
+      size: c.sizes[id] || (BASE_LARGE.includes(id) ? 'grande' : 'pequeno')
+    }));
+    const custom = c.customMuscles.filter(m => m && m.id).map(m => ({
+      id: m.id, builtin: false, hidden: false, label: m.label,
+      group: fix(m.group, m.id), size: m.size === 'grande' ? 'grande' : 'pequeno'
+    }));
+    return base.concat(custom);
+  }
+
+  // Secciones del cuerpo con sus músculos (solo visibles, salvo includeHidden)
+  function groups(opts = {}) {
+    const ms = allMuscles().filter(m => opts.includeHidden || !m.hidden);
+    return groupList().map(g => ({ ...g, muscles: ms.filter(m => m.group === g.id).map(m => m.id) }));
+  }
+
+  function muscleLabel(id) {
+    const c = cfg();
+    if (c.labels[id]) return c.labels[id];
+    const custom = c.customMuscles.find(m => m && m.id === id);
+    if (custom) return custom.label;
+    return (MUSCLES[id] && MUSCLES[id].label) || id;
+  }
+  function sizeOf(id) { const m = allMuscles().find(x => x.id === id); return m ? m.size : (BASE_LARGE.includes(id) ? 'grande' : 'pequeno'); }
+  function isLarge(id) { return sizeOf(id) === 'grande'; }
+  function isVisible(id) { return allMuscles().some(m => m.id === id && !m.hidden); }
+
+  // Cuántos ejercicios usan el músculo (principal o secundario) y cuántos se quedarían sin músculo principal
+  function usage(id) {
+    const list = (Storage.all('exercises') || []);
+    const using = list.filter(ex => (ex.muscles || []).includes(id) || (ex.secondary || []).includes(id));
+    return { total: using.length, soleOnly: using.filter(ex => ex.muscles.length === 1 && ex.muscles[0] === id).length };
+  }
+
+  const slug = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'musculo';
+
+  function checkMuscle(label, group, size, exceptId) {
+    if (!label) throw new Error('Escribe el nombre del músculo');
+    const twin = allMuscles().find(m => m.id !== exceptId && norm(m.label) === norm(label));
+    if (twin) throw new Error(twin.hidden ? `"${twin.label}" ya existe pero está oculto: restáuralo desde la lista de ocultos` : `Ya existe un músculo llamado "${twin.label}"`);
+    if (!groupList().some(g => g.id === group)) throw new Error('Elige una sección del cuerpo');
+    if (!SIZES[size]) throw new Error('Elige el tamaño del músculo');
+  }
+
+  function addMuscle({ label, group, size }) {
+    label = String(label || '').trim();
+    checkMuscle(label, group, size);
+    const c = cfg(true);
+    const id = `m-${slug(label)}-${Math.random().toString(36).slice(2, 5)}`;
+    c.customMuscles.push({ id, label, group, size });
+    persist();
+    return id;
+  }
+
+  function updateMuscle(id, { label, group, size }) {
+    label = String(label || '').trim();
+    checkMuscle(label, group, size, id);
+    const c = cfg(true);
+    const custom = c.customMuscles.find(m => m.id === id);
+    if (custom) { Object.assign(custom, { label, group, size }); persist(); return; }
+    // Músculo de fábrica: se guardan solo las diferencias con el original
+    const setOrDrop = (map, val, original) => { if (val === original) delete map[id]; else map[id] = val; };
+    setOrDrop(c.labels, label, MUSCLES[id] && MUSCLES[id].label);
+    setOrDrop(c.groupOverrides, group, baseGroupOf(id));
+    setOrDrop(c.sizes, size, BASE_LARGE.includes(id) ? 'grande' : 'pequeno');
+    persist();
+  }
+
+  // De fábrica: se oculta. Propio: se elimina.
+  function removeMuscle(id) {
+    const c = cfg(true);
+    if (MUSCLES[id]) { if (!c.hiddenMuscles.includes(id)) c.hiddenMuscles.push(id); }
+    else c.customMuscles = c.customMuscles.filter(m => m.id !== id);
+    persist();
+  }
+  function restoreMuscle(id) {
+    const c = cfg(true);
+    c.hiddenMuscles = c.hiddenMuscles.filter(x => x !== id);
+    persist();
+  }
+
+  // Cambia (o quita, con to=null) un músculo en todos los ejercicios que lo usan
+  function replaceInExercises(from, to) {
+    let touched = 0;
+    (Storage.all('exercises') || []).forEach(ex => {
+      if (!(ex.muscles || []).includes(from) && !(ex.secondary || []).includes(from)) return;
+      const swap = arr => arr.reduce((out, m) => { const v = m === from ? to : m; if (v && !out.includes(v)) out.push(v); return out; }, []);
+      ex.muscles = swap(ex.muscles || []);
+      ex.secondary = swap(ex.secondary || []).filter(m => !ex.muscles.includes(m));
+      ex.updatedAt = new Date().toISOString();
+      touched++;
+    });
+    persist();
+    return touched;
+  }
+
+  function checkGroupName(label, exceptId) {
+    if (!label) throw new Error('Escribe el nombre de la sección');
+    const twin = groupList().find(g => g.id !== exceptId && norm(g.label) === norm(label));
+    if (twin) throw new Error(`Ya existe una sección llamada "${twin.label}"`);
+  }
+  function addGroup(label) {
+    label = String(label || '').trim();
+    checkGroupName(label);
+    const c = cfg(true);
+    const id = `g-${slug(label)}-${Math.random().toString(36).slice(2, 5)}`;
+    c.customGroups.push({ id, label });
+    persist();
+    return id;
+  }
+  function renameGroup(id, label) {
+    label = String(label || '').trim();
+    checkGroupName(label, id);
+    const c = cfg(true);
+    const custom = c.customGroups.find(g => g.id === id);
+    if (custom) custom.label = label; else c.groupLabels[id] = label;
+    persist();
+  }
+  // Solo las secciones propias, y solo si no tienen músculos (ni ocultos)
+  function removeGroup(id) {
+    const g = groups({ includeHidden: true }).find(x => x.id === id);
+    if (!g || g.builtin) throw new Error('Las secciones de fábrica no se pueden eliminar');
+    if (g.muscles.length) throw new Error('Mueve primero sus músculos a otra sección');
+    const c = cfg(true);
+    c.customGroups = c.customGroups.filter(x => x.id !== id);
+    persist();
+  }
 
   /**
    * Selector de músculos por CAMPO (agrupado Brazo/Torso/Pierna), sin mapa.
@@ -51,11 +218,11 @@ const MuscleMap = (() => {
     function paint() {
       container.innerHTML = `
         <div class="mf-picker">
-          ${MUSCLE_GROUPS.map(g => `
+          ${groups().filter(g => g.muscles.length).map(g => `
             <div class="mf-group">
-              <div class="mf-group-label">${g.label}</div>
+              <div class="mf-group-label">${Utils.escapeHtml(g.label)}</div>
               <div class="mf-group-items">
-                ${g.muscles.map(id => `<button type="button" class="mf-chip ${selected.includes(id) ? 'active' : ''}" data-m="${id}">${muscleLabel(id)}</button>`).join('')}
+                ${g.muscles.map(id => `<button type="button" class="mf-chip ${selected.includes(id) ? 'active' : ''}" data-m="${id}">${Utils.escapeHtml(muscleLabel(id))}</button>`).join('')}
               </div>
             </div>`).join('')}
         </div>`;
@@ -217,7 +384,7 @@ const MuscleMap = (() => {
       });
       const legend = container.querySelector('#mm-legend');
       legend.innerHTML = selected.length
-        ? selected.map(id => `<span class="chip chip-accent">${muscleLabel(id)}</span>`).join('')
+        ? selected.map(id => `<span class="chip chip-accent">${Utils.escapeHtml(muscleLabel(id))}</span>`).join('')
         : '<span class="text-muted" style="font-size:var(--fs-xs)">Toca un músculo en la silueta para seleccionarlo</span>';
     }
 
@@ -245,5 +412,11 @@ const MuscleMap = (() => {
     return { getSelected: () => selected.slice() };
   }
 
-  return { MUSCLES, MUSCLE_GROUPS, muscleLabel, render, renderFieldPicker };
+  return {
+    MUSCLES, SIZES, get MUSCLE_GROUPS() { return groups(); },
+    muscleLabel, groups, groupList, allMuscles, sizeOf, isLarge, isVisible, usage,
+    addMuscle, updateMuscle, removeMuscle, restoreMuscle, replaceInExercises,
+    addGroup, renameGroup, removeGroup,
+    render, renderFieldPicker
+  };
 })();

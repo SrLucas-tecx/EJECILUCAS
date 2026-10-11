@@ -176,3 +176,327 @@ body.modal-open .bottom-nav{ display:none; }
   .quick-btn small{ flex-basis:100%; margin-left:calc(1.4rem + var(--space-3)); margin-top:-4px; }
   .today-head h2{ font-size:var(--fs-lg); }
 }
+
+/* ==========================================================================
+   SPRINT 3 — Registro de entrenamiento cómodo
+   ========================================================================== */
+
+/* Botón ✓ de serie hecha */
+.log-set-done{
+  width:36px; height:36px; border-radius:50%; flex-shrink:0;
+  background:none; border:2px solid var(--color-border); color:var(--color-text-muted);
+  font-size:1rem; font-weight:700; transition:background .15s, border-color .15s, color .15s;
+}
+.log-set-done:hover{ border-color:var(--color-success); color:var(--color-success); }
+.log-set-done.on{ background:var(--color-success); border-color:var(--color-success); color:#0b1a14; }
+.c-actions{ white-space:nowrap; }
+.c-actions > *{ vertical-align:middle; }
+.log-exercise tr.is-done{ background:rgba(52,211,153,.07); }
+
+/* Barra de descanso: se queda arriba mientras bajas por los ejercicios */
+.rest-bar{
+  position:sticky; top:calc(-1 * var(--space-4)); z-index:5; margin-bottom:var(--space-3);
+  display:flex; align-items:center; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap;
+  background:var(--color-bg-elevated); border:1px solid var(--color-mint); color:var(--color-text);
+  border-radius:var(--radius-md); padding:var(--space-2) var(--space-3); font-size:var(--fs-sm);
+  box-shadow:var(--shadow-card);
+}
+.rest-bar strong{ font-family:var(--font-display); font-size:var(--fs-lg); }
+.rest-bar.is-over{ border-color:var(--color-success); }
+.rest-bar-actions{ display:flex; gap:6px; }
+
+@media (max-width: 860px){
+  /* Días del entrenamiento en una sola fila deslizable */
+  .modal-body .rt-days-tabs{ flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; }
+  .modal-body .rt-day-tab, .modal-body .rt-day-add{ flex-shrink:0; }
+
+  /* Cada serie se vuelve una tarjeta con campos grandes (en lugar de una tabla ancha) */
+  .log-exercise .table-compact, .log-exercise .table-compact tbody{ display:block; }
+  .log-exercise .table-compact thead{ display:none; }
+  .log-exercise .table-compact tr{
+    display:grid; grid-template-columns:repeat(4, 1fr); gap:10px 8px;
+    padding:var(--space-3); margin-bottom:var(--space-2);
+    background:var(--color-bg-elevated); border:1px solid var(--color-border); border-radius:var(--radius-md);
+  }
+  .log-exercise .table-compact tr.is-done{ border-color:var(--color-success); background:rgba(52,211,153,.08); }
+  .log-exercise .table-compact td{
+    border:none; padding:0; min-width:0; display:flex; flex-direction:column; gap:3px;
+  }
+  .log-exercise .table-compact td::before{
+    content:attr(data-label); font-size:.72rem; font-weight:600; color:var(--color-text-muted);
+  }
+  .log-exercise .table-compact td[colspan]{ grid-column:1 / -1; display:block; }
+
+  .c-serie{ order:1; grid-column:span 2; flex-direction:row !important; align-items:center; gap:6px !important;
+            font-family:var(--font-display); font-weight:700; font-size:var(--fs-md); }
+  .c-serie::before{ font-size:var(--fs-md) !important; color:var(--color-text) !important; }
+  .c-actions{ order:2; grid-column:span 2; flex-direction:row !important; justify-content:flex-end; align-items:center; gap:10px !important; }
+  .c-actions::before{ display:none; }
+  .c-prev{ order:3; grid-column:1 / -1; flex-direction:row !important; gap:6px !important; }
+  .c-side{ order:4; grid-column:1 / -1; }
+  .c-weight{ order:5; grid-column:span 2; }
+  .c-reps{ order:6; grid-column:span 2; }
+  .c-rir{ order:7; grid-column:span 2; }
+  .c-rpe{ order:8; grid-column:span 2; }
+  .c-rm{ order:9; grid-column:1 / -1; flex-direction:row !important; gap:6px !important; }
+
+  .log-exercise .rt-input{ width:100%; min-height:48px; font-size:18px; text-align:center; }
+  .log-exercise select.log-set-side{ width:100%; min-height:44px; font-size:16px; }
+  .log-set-done{ width:44px; height:44px; font-size:1.15rem; }
+  .log-add-set{ width:100%; min-height:var(--touch); }
+  .log-ex-head .log-copy-prev{ width:100%; }
+
+  /* Barra de descanso compacta, pegada al borde superior de la ventana */
+  .rest-bar{ top:calc(-1 * var(--space-4)); margin-top:calc(-1 * var(--space-4)); border-radius:0 0 var(--radius-md) var(--radius-md);
+             padding:var(--space-2) var(--space-3); flex-wrap:nowrap; }
+  .rest-bar > span{ white-space:nowrap; }
+  .rest-bar-actions .btn-sm{ min-height:36px; padding:4px 10px; }
+}
+
+/* ==========================================================================
+   SPRINT 4 — Ajustes claros
+   ========================================================================== */
+.settings-head{ margin-bottom:var(--space-4); }
+.settings-head .section-title{ margin-bottom:4px; }
+.settings-head p{ margin:0; max-width:60ch; }
+
+.settings-layout{
+  display:grid; grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);
+  gap:var(--space-3); align-items:start;
+}
+.settings-side{ display:flex; flex-direction:column; gap:var(--space-3); }
+
+.settings-card{ align-items:stretch; gap:var(--space-3); }
+.settings-card-head{ display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); flex-wrap:wrap; }
+.settings-card-head h4{ font-size:var(--fs-md); margin:0; }
+.settings-card p{ margin:0; }
+.settings-hint{ font-size:var(--fs-sm); color:var(--color-text-muted); line-height:1.5; }
+.settings-hint strong{ color:var(--color-text); }
+.settings-actions{ display:flex; gap:var(--space-2); flex-wrap:wrap; }
+.settings-actions > *{ flex:1 1 150px; justify-content:center; text-align:center; }
+.file-btn{ display:inline-flex; align-items:center; justify-content:center; gap:6px; cursor:pointer; }
+
+/* Estado (respaldo / almacenamiento) */
+.status-pill{
+  display:inline-flex; align-items:center; gap:6px; padding:3px 10px; border-radius:var(--radius-pill);
+  font-size:var(--fs-xs); font-weight:600; background:var(--color-bg-elevated);
+  border:1px solid var(--color-border); color:var(--color-text-muted);
+}
+.status-pill::before{ content:''; width:8px; height:8px; border-radius:50%; background:currentColor; opacity:.7; }
+.status-pill.is-ok{ color:var(--color-success); border-color:rgba(52,211,153,.4); background:rgba(52,211,153,.1); }
+.status-pill.is-warn{ color:var(--color-warning); border-color:rgba(251,191,36,.45); background:rgba(251,191,36,.1); }
+
+/* Categorías de respaldo: escondidas hasta que se necesitan */
+.settings-more{ border:1px solid var(--color-border); border-radius:var(--radius-md); padding:0 var(--space-3); background:var(--color-bg-elevated); }
+.settings-more summary{ cursor:pointer; padding:var(--space-3) 0; font-size:var(--fs-sm); font-weight:600; list-style:none; display:flex; justify-content:space-between; align-items:center; }
+.settings-more summary::-webkit-details-marker{ display:none; }
+.settings-more summary::after{ content:'▾'; color:var(--color-text-muted); transition:transform .2s; }
+.settings-more[open] summary::after{ transform:rotate(180deg); }
+.settings-more .backup-category-list{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:var(--space-2); padding-bottom:var(--space-3); }
+.settings-more .backup-category-list .btn-sm{ text-align:left; justify-content:flex-start; white-space:normal; }
+
+/* Interruptor (modo oscuro) */
+.switch-row{ min-height:var(--touch); gap:var(--space-3); font-size:var(--fs-sm); font-weight:500; }
+input.switch{
+  appearance:none; -webkit-appearance:none; flex-shrink:0; cursor:pointer;
+  width:46px; height:26px; border-radius:var(--radius-pill); position:relative;
+  background:var(--color-border); border:none; padding:0; min-height:0; transition:background .2s;
+}
+input.switch::after{
+  content:''; position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%;
+  background:#fff; transition:transform .2s; box-shadow:0 1px 3px rgba(0,0,0,.35);
+}
+input.switch:checked{ background:var(--color-accent); }
+input.switch:checked::after{ transform:translateX(20px); }
+
+/* Selector kg / lb */
+.seg{ display:inline-flex; background:var(--color-bg-elevated); border:1px solid var(--color-border); border-radius:var(--radius-pill); padding:3px; }
+.seg-btn{ background:none; border:none; color:var(--color-text-muted); font-weight:600; font-size:var(--fs-sm); padding:6px 18px; min-height:34px; border-radius:var(--radius-pill); }
+.seg-btn.active{ background:var(--color-accent); color:#fff; }
+
+/* Almacenamiento */
+.storage-bar{ height:10px; }
+.settings-card .btn-secondary:disabled{ opacity:.5; cursor:not-allowed; }
+
+/* Zona de riesgo */
+.settings-card.is-danger{ border-color:rgba(240,85,92,.4); }
+.btn-danger-outline{
+  background:none; color:var(--color-danger); border:1px solid var(--color-danger);
+  border-radius:var(--radius-md); font-weight:600; font-size:var(--fs-sm); min-height:var(--touch); padding:var(--space-2) var(--space-4);
+}
+.btn-danger-outline:hover{ background:var(--color-danger); color:#fff; }
+
+@media (max-width: 860px){
+  .settings-layout{ grid-template-columns:1fr; }
+  .settings-more .backup-category-list .btn-sm{ min-height:var(--touch); }
+}
+
+@media (max-width: 560px){
+  .settings-actions > *{ flex:1 1 100%; }
+}
+
+/* ==========================================================================
+   SPRINT 5 — Lenguaje simple y ayuda
+   ========================================================================== */
+
+/* Término tocable: parece texto normal, con un ⓘ discreto */
+.term{
+  background:none; border:none; padding:0; margin:0; color:inherit; font:inherit;
+  text-transform:inherit; letter-spacing:inherit; text-align:inherit; cursor:help;
+  border-bottom:1px dotted var(--color-text-muted); display:inline;
+}
+.term:hover{ color:var(--color-accent); border-bottom-color:var(--color-accent); }
+.term-i{ font-size:.8em; margin-left:3px; color:var(--color-text-muted); }
+.term:hover .term-i{ color:var(--color-accent); }
+.cell-label{ display:none; }
+
+/* Aviso con la explicación (arriba de todo, incluso de las ventanas) */
+.term-pop{
+  position:fixed; z-index:300; left:50%; bottom:calc(16px + env(safe-area-inset-bottom, 0px));
+  width:min(92vw, 420px); transform:translate(-50%, 16px); opacity:0; pointer-events:none;
+  background:var(--color-bg-elevated); border:1px solid var(--color-accent); border-radius:var(--radius-lg);
+  padding:var(--space-3) var(--space-4); box-shadow:var(--shadow-modal);
+  transition:opacity .18s, transform .18s;
+}
+.term-pop.open{ opacity:1; transform:translate(-50%, 0); pointer-events:auto; }
+.term-pop-head{ display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); margin-bottom:6px; }
+.term-pop-head strong{ font-family:var(--font-display); font-size:var(--fs-md); color:var(--color-accent); }
+.term-pop-close{
+  background:none; border:1px solid var(--color-border); color:var(--color-text-muted);
+  width:36px; height:36px; border-radius:var(--radius-sm); flex-shrink:0;
+}
+.term-pop p{ margin:0 0 6px; font-size:var(--fs-sm); line-height:1.5; }
+.term-pop-example{ color:var(--color-text-muted); }
+.term-pop-example span{ font-weight:700; color:var(--color-text); }
+.term-pop-more{
+  background:none; border:none; padding:6px 0 0; color:var(--color-accent);
+  font-size:var(--fs-sm); font-weight:600; text-decoration:underline; min-height:36px;
+}
+
+/* Glosario */
+.glossary-list dd{ margin-bottom:4px; }
+.glossary-list dd em{ display:block; color:var(--color-text-muted); font-style:normal; margin-top:2px; }
+
+/* Guía de bienvenida */
+.tour-step{ text-align:center; padding:var(--space-3) var(--space-2) var(--space-2); }
+.tour-icon{ font-size:3rem; line-height:1; margin-bottom:var(--space-3); }
+.tour-step h3{ font-size:var(--fs-lg); margin-bottom:var(--space-2); }
+.tour-step p{ color:var(--color-text-muted); max-width:42ch; margin:0 auto; line-height:1.55; }
+.tour-dots{ display:flex; justify-content:center; gap:8px; margin:var(--space-4) 0; }
+.tour-dots span{ width:8px; height:8px; border-radius:50%; background:var(--color-border); transition:background .2s, transform .2s; }
+.tour-dots span.on{ background:var(--color-accent); transform:scale(1.35); }
+.tour-actions{ display:flex; gap:var(--space-2); }
+.tour-actions .btn-primary{ flex:1; }
+.tour-actions .btn-secondary{ min-width:96px; }
+
+@media (max-width: 860px){
+  /* En tarjeta de serie, la etiqueta tocable reemplaza al texto automático */
+  .c-rir::before, .c-rpe::before, .c-rm::before{ display:none; }
+  .cell-label{ display:block; font-size:.72rem; font-weight:600; color:var(--color-text-muted); }
+  .c-rm .cell-label{ display:inline; }
+  .term-pop{ bottom:calc(84px + env(safe-area-inset-bottom, 0px)); }
+  body.modal-open .term-pop{ bottom:calc(16px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* ==========================================================================
+   PLANTILLAS DE RUTINA — Sprint 1
+   ========================================================================== */
+.tpl-section{ margin-bottom:var(--space-4); }
+.modal-body .tpl-section > h4, .modal-body .tpl-preview > h4{ font-size:var(--fs-sm); margin:0 0 var(--space-2); }
+.tpl-seg{ display:flex; width:100%; }
+.tpl-seg .seg-btn{ flex:1; padding:6px 10px; }
+.tpl-choices{ display:grid; gap:var(--space-2); }
+.tpl-choice{
+  display:flex; flex-direction:column; gap:2px; text-align:left; width:100%;
+  background:var(--color-bg-card); border:1px solid var(--color-border); color:var(--color-text);
+  border-radius:var(--radius-md); padding:var(--space-3) var(--space-4); min-height:var(--touch);
+  transition:border-color .15s, background .15s;
+}
+.tpl-choice strong{ font-size:var(--fs-sm); }
+.tpl-choice small{ font-size:var(--fs-xs); color:var(--color-text-muted); line-height:1.45; }
+.tpl-choice:hover{ border-color:var(--color-accent); }
+.tpl-choice.active{ border-color:var(--color-accent); background:var(--color-accent-soft); box-shadow:inset 3px 0 0 var(--color-accent); }
+
+.tpl-vol{ display:flex; flex-wrap:wrap; gap:6px; }
+.tpl-vol-chip{ font-weight:600; }
+.tpl-vol-chip.is-ok{ color:var(--color-success); border-color:rgba(52,211,153,.4); background:rgba(52,211,153,.1); }
+.tpl-vol-chip.is-low{ color:var(--color-warning); border-color:rgba(251,191,36,.45); background:rgba(251,191,36,.1); }
+.tpl-vol-chip.is-high{ color:var(--color-danger); border-color:rgba(240,85,92,.45); background:rgba(240,85,92,.1); }
+
+.tpl-day{ background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-3); margin-bottom:var(--space-2); }
+.tpl-day-head{ display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); flex-wrap:wrap; margin-bottom:var(--space-2); }
+.modal-body .tpl-day-head h4{ margin:0; font-size:var(--fs-md); }
+.tpl-ex{ display:flex; flex-direction:column; padding:6px 0; border-top:1px dashed var(--color-border); }
+.tpl-ex strong{ font-size:var(--fs-sm); }
+.tpl-ex span{ font-size:var(--fs-xs); color:var(--color-text-muted); }
+
+
+/* ==========================================================================
+   MÚSCULOS Y SECCIONES — Sprint 2
+   ========================================================================== */
+.mgr-actions{ display:flex; gap:var(--space-2); flex-wrap:wrap; margin:var(--space-3) 0; }
+.mgr-open{ align-self:flex-start; }
+.mgr-group{ background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:var(--space-3); margin-bottom:var(--space-2); }
+.mgr-group-head{ display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); margin-bottom:var(--space-2); }
+.modal-body .mgr-group-head h4{ margin:0; font-size:var(--fs-md); }
+.mgr-group-actions, .mgr-row-actions{ display:flex; gap:6px; flex-shrink:0; }
+.mgr-row{ display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); padding:6px 0; border-top:1px dashed var(--color-border); }
+.mgr-group-head + .mgr-row{ border-top:none; }
+.mgr-row-main{ display:flex; align-items:center; flex-wrap:wrap; gap:6px; min-width:0; }
+.mgr-row-main strong{ font-size:var(--fs-sm); }
+
+/* ==========================================================================
+   UNIDAD DE PESO POR RUTINA (botón kg | lb)
+   ========================================================================== */
+.rt-unit-seg, .log-unit-seg{ flex-shrink:0; }
+.rt-ex-block-top .rt-unit-seg .seg-btn{ padding:2px 12px; min-height:30px; font-size:var(--fs-xs); }
+.field .seg{ align-self:flex-start; }
+
+/* ==========================================================================
+   PANEL DE VOLUMEN SEMANAL — Sprint 3
+   ========================================================================== */
+.vol-panel{ background:var(--color-bg-card); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:0 var(--space-3); margin:var(--space-3) 0; }
+.vol-panel > summary{ cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between; gap:var(--space-2); flex-wrap:wrap; padding:var(--space-3) 0; font-weight:700; font-size:var(--fs-sm); min-height:var(--touch); }
+.vol-panel > summary::-webkit-details-marker, .vol-settings > summary::-webkit-details-marker{ display:none; }
+.vol-panel > summary::after{ content:'▾'; color:var(--color-text-muted); transition:transform .2s; margin-left:auto; }
+.vol-panel[open] > summary::after{ transform:rotate(180deg); }
+.vol-summary{ font-size:var(--fs-xs); font-weight:600; color:var(--color-text-muted); }
+.vol-body{ padding-bottom:var(--space-3); }
+.vol-intro{ font-size:var(--fs-xs); color:var(--color-text-muted); line-height:1.5; margin:0 0 var(--space-3); }
+.vol-group{ margin-bottom:var(--space-3); }
+.vol-group-label{ font-size:var(--fs-xs); font-weight:700; color:var(--color-text-muted); margin-bottom:4px; }
+.vol-row{ display:grid; grid-template-columns:150px 1fr auto; align-items:center; gap:4px var(--space-3); padding:6px 0; border-top:1px dashed var(--color-border); }
+.vol-name{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:var(--fs-sm); }
+.vol-bar{ position:relative; height:10px; border-radius:var(--radius-pill); background:var(--color-bg-elevated); overflow:hidden; }
+.vol-fill{ position:absolute; top:0; bottom:0; left:0; background:var(--color-success); }
+.vol-fill-ind{ opacity:.45; }
+.vol-row.is-warn .vol-fill{ background:var(--color-warning); }
+.vol-row.is-danger .vol-fill{ background:var(--color-danger); }
+.vol-row.is-neutral .vol-fill{ background:var(--color-text-muted); }
+.vol-mark{ position:absolute; top:0; bottom:0; width:2px; background:var(--color-text); opacity:.55; }
+.vol-mark-max{ opacity:.9; }
+.vol-nums{ display:flex; flex-direction:column; align-items:flex-end; text-align:right; line-height:1.2; }
+.vol-nums strong{ font-family:var(--font-display); font-size:var(--fs-md); }
+.vol-nums small{ font-size:.7rem; color:var(--color-text-muted); }
+.vol-hint{ grid-column:1 / -1; font-size:var(--fs-xs); color:var(--color-text-muted); }
+.vol-row.is-warn .vol-hint{ color:var(--color-warning); }
+.vol-row.is-danger .vol-hint{ color:var(--color-danger); }
+.vol-legend{ display:flex; flex-wrap:wrap; gap:var(--space-3); font-size:.7rem; color:var(--color-text-muted); margin:var(--space-2) 0; }
+.vol-key{ display:inline-block; width:14px; height:8px; border-radius:4px; background:var(--color-success); vertical-align:middle; margin-right:4px; }
+.vol-key-ind{ opacity:.45; }
+.vol-key-mark{ width:2px; height:10px; border-radius:0; background:var(--color-text); opacity:.7; }
+.vol-warnings{ display:flex; flex-direction:column; gap:6px; margin:var(--space-3) 0; }
+.vol-warning{ padding:var(--space-2) var(--space-3); border-radius:var(--radius-sm); font-size:var(--fs-xs); line-height:1.45; }
+.vol-warning.is-warn{ background:rgba(251,191,36,.12); color:var(--color-warning); }
+.vol-warning.is-danger{ background:rgba(240,85,92,.12); color:var(--color-danger); }
+.vol-untrained{ font-size:var(--fs-xs); margin:var(--space-2) 0; }
+.vol-settings{ border-top:1px solid var(--color-border); margin-top:var(--space-2); padding-top:var(--space-2); }
+.vol-settings > summary{ cursor:pointer; list-style:none; font-size:var(--fs-sm); font-weight:600; padding:var(--space-2) 0; min-height:var(--touch); display:flex; align-items:center; }
+.vol-settings .field input{ width:100px; }
+
+@media (max-width: 560px){
+  .vol-row{ grid-template-columns:1fr auto; }
+  .vol-bar{ grid-column:1 / -1; grid-row:2; }
+  .vol-nums{ grid-row:1; grid-column:2; }
+}
+

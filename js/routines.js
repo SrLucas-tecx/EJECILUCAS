@@ -13,6 +13,17 @@ const Routines = (() => {
   function get(id) { return Storage.find('routines', id); }
   function logsOf(clientId) { return Storage.all('workoutLogs').filter(l => l.clientId === clientId); }
 
+  // Unidad propia de la rutina (null = la rutina no tiene una y se usa la de Ajustes)
+  const routineUnit = r => (r && ['kg', 'lb'].includes(r.targetWeightUnit) ? r.targetWeightUnit : null);
+
+  // Botón kg | lb (se usa en el constructor; el mismo cambia la unidad de toda la rutina)
+  function unitSeg(unit, cls = 'rt-unit-seg') {
+    return `<div class="seg ${cls}" role="group" aria-label="Unidad de peso de esta rutina">
+      <button type="button" class="seg-btn ${unit === 'kg' ? 'active' : ''}" data-unit="kg" aria-pressed="${unit === 'kg'}">kg</button>
+      <button type="button" class="seg-btn ${unit === 'lb' ? 'active' : ''}" data-unit="lb" aria-pressed="${unit === 'lb'}">lb</button>
+    </div>`;
+  }
+
   function targetWeightToUnit(kg, unit) {
     if (kg === '' || kg == null || isNaN(kg)) return '';
     return Utils.round(unit === 'lb' ? Utils.kgToLb(Number(kg)) : Number(kg), 1);
@@ -206,7 +217,7 @@ const Routines = (() => {
 
   function rmCellHtml(s, isPR) {
     if (!(s.weight && s.reps)) return '—';
-    return `${Utils.toUnit(Utils.estimate1RM(s.weight, s.reps))} ${Utils.unitLabel()}${isPR ? ' <span class="pr-badge">🏆 PR</span>' : ''}`;
+    return `${Utils.toUnit(Utils.estimate1RM(s.weight, s.reps))} ${Utils.unitLabel()}${isPR ? ' <span class="pr-badge">🏆 Récord</span>' : ''}`;
   }
 
   // Actualiza las celdas de 1RM / PR de un ejercicio sin repintar todo el formulario
@@ -216,7 +227,7 @@ const Routines = (() => {
     if (ex && (ex.trackPR === false || ex.measureByTime)) return;   // estos ejercicios no muestran columna de PR
     const prIdx = prIndexesForEntry(entry, ex, draft.clientId, draft.date, draft.id);
     host.querySelectorAll(`tr[data-i="${i}"]`).forEach(tr => {
-      const cell = tr.querySelector('.rm-cell');
+      const cell = tr.querySelector('.rm-val');
       if (cell) cell.innerHTML = rmCellHtml(entry.sets[Number(tr.dataset.j)], prIdx.has(Number(tr.dataset.j)));
     });
   }
@@ -232,12 +243,14 @@ const Routines = (() => {
         <p class="text-muted">Crea rutinas por día, asigna ejercicios y registra el entrenamiento real.</p></div>
         <div class="client-card-actions">
           ${copiedRoutine ? '<button class="btn-sm btn-secondary" id="rt-paste">📥 Pegar rutina copiada</button>' : ''}
+          <button class="btn-secondary" id="rt-template">📐 Desde plantilla</button>
           <button class="btn-primary" id="rt-new">+ Nueva rutina</button>
         </div>
       </div>
       <div class="routines-list" id="rt-list"></div>`;
 
     container.querySelector('#rt-new').addEventListener('click', () => openBuilder(null, () => renderPage(container)));
+    container.querySelector('#rt-template').addEventListener('click', () => Templates.openWizard(() => renderPage(container)));
     const pasteButton = container.querySelector('#rt-paste');
     if (pasteButton) pasteButton.addEventListener('click', () => pasteRoutine(container));
     const list = container.querySelector('#rt-list');
@@ -286,12 +299,12 @@ const Routines = (() => {
 
   function openRirRpeGuide() {
     UI.openModal({
-      title: '📏 Guía RIR / RPE',
+      title: '📏 Guía de reserva y esfuerzo (RIR / RPE)',
       hideFooter: true,
       body: `
         <p><strong>Fallo técnico:</strong> el punto de una serie donde la fatiga impide completar una repetición extra manteniendo la forma correcta. Todas las métricas de intensidad se basan en este fallo técnico, no en el fallo concéntrico absoluto.</p>
         <table class="table-compact" style="margin-top:var(--space-3);">
-          <thead><tr><th>RPE</th><th>RIR</th><th>Nivel</th><th>Objetivo típico</th></tr></thead>
+          <thead><tr><th>Esfuerzo (RPE)</th><th>Reserva (RIR)</th><th>Nivel</th><th>Objetivo típico</th></tr></thead>
           <tbody>
             <tr><td>10</td><td>0</td><td>Máximo / Fallo técnico</td><td>Hipertrofia (series finales) / Test de fuerza</td></tr>
             <tr><td>9</td><td>1</td><td>Muy alto</td><td>Hipertrofia (estímulo óptimo) / Fuerza máxima</td></tr>
@@ -299,7 +312,7 @@ const Routines = (() => {
             <tr><td>7</td><td>3</td><td>Moderado</td><td>Potencia / primeras series de la sesión</td></tr>
           </tbody>
         </table>
-        <p class="text-muted" style="font-size:var(--fs-xs); margin-top:var(--space-2);">RIR 3+ se considera de menor intensidad (calentamiento o aproximación).</p>
+        <p class="text-muted" style="font-size:var(--fs-xs); margin-top:var(--space-2);">Con 3 o más repeticiones en reserva (RIR 3+) la serie es de menor intensidad: calentamiento o aproximación.</p>
       `
     });
   }
@@ -368,7 +381,7 @@ const Routines = (() => {
         const bwEx = Exercises.isBodyweight(meta);
         const sets = normalizeTargetSets(ex);
         const sideLabel = { izq: 'Izq.', der: 'Der.', ambos: 'Ambos' };
-        const pesoLabel = bwEx ? `Extra obj. (${unit})` : `Peso obj. (${unit})`;
+        const pesoLabel = bwEx ? `Extra meta (${unit})` : `Peso meta (${unit})`;
         const pesoVal = w => w ? (bwEx ? '+' : '') + targetWeightToUnit(w, unit) : (bwEx ? 'Peso corporal' : '—');
 
         ensureSpace(10);
@@ -376,12 +389,12 @@ const Routines = (() => {
         doc.text(`${meta ? meta.name : '(ejercicio eliminado)'}${uni ? ' (unilateral)' : ''}`, margin, y);
         y += 5;
 
-        const metricLabel = meta?.measureByTime ? 'Tiempo (seg)' : 'Reps obj.';
+        const metricLabel = meta?.measureByTime ? 'Tiempo (seg)' : 'Reps meta';
         const cols = uni
           ? [{ label: 'Serie', w: 14 }, { label: 'Lado', w: 24 }, { label: metricLabel, w: 34 },
-             { label: pesoLabel, w: 52 }, { label: 'RIR obj.', w: contentW - 124 }]
+             { label: pesoLabel, w: 52 }, { label: 'Reserva meta', w: contentW - 124 }]
           : [{ label: 'Serie', w: 16 }, { label: metricLabel, w: 44 },
-             { label: pesoLabel, w: 60 }, { label: 'RIR obj.', w: contentW - 120 }];
+             { label: pesoLabel, w: 60 }, { label: 'Reserva meta', w: contentW - 120 }];
 
         ensureSpace(rowH * (sets.length + 1) + 4);
 
@@ -419,13 +432,17 @@ const Routines = (() => {
 
   /* ---------------- Constructor de rutina ---------------- */
 
-  function openBuilder(routineId, onDone) {
+  // initialDraft (opcional): rutina ya armada (p. ej. desde una plantilla) que se edita antes de guardarla por primera vez
+  function openBuilder(routineId, onDone, initialDraft) {
     const client = State.getActiveClient();
     const editing = routineId ? get(routineId) : null;
-    const draft = editing ? JSON.parse(JSON.stringify(editing)) : { clientId: client.id, name: '', notes: '', days: [newDay('Día 1')] };
+    const draft = editing ? JSON.parse(JSON.stringify(editing))
+      : initialDraft ? JSON.parse(JSON.stringify(initialDraft))
+      : { clientId: client.id, name: '', notes: '', days: [newDay('Día 1')] };
     const savedWeightUnit = editing?.targetWeightUnit;
     const builderState = {
       activeDayIndex: 0,
+      volOpen: false,
       copiedExercises: null,
       weightUnit: ['kg', 'lb'].includes(savedWeightUnit) ? savedWeightUnit : Utils.currentUnit()
     };
@@ -433,7 +450,7 @@ const Routines = (() => {
     const bodyHost = document.createElement('div');
     const paint = (dayIndex = builderState.activeDayIndex) => {
       builderState.activeDayIndex = Math.max(0, Math.min(dayIndex, draft.days.length - 1));
-      bodyHost.innerHTML = builderMarkup(draft, builderState.activeDayIndex, builderState.copiedExercises !== null, builderState.weightUnit);
+      bodyHost.innerHTML = builderMarkup(draft, builderState.activeDayIndex, builderState.copiedExercises !== null, builderState.weightUnit, builderState.volOpen);
       wireBuilder(bodyHost, draft, paint, builderState);
     };
 
@@ -458,19 +475,16 @@ const Routines = (() => {
     });
   }
 
-  function builderMarkup(draft, activeDayIndex, hasCopiedExercises, weightUnit) {
+  function builderMarkup(draft, activeDayIndex, hasCopiedExercises, weightUnit, volOpen) {
     return `
-      <div style="text-align:right; margin-bottom:var(--space-2);"><button type="button" class="btn-sm btn-secondary" id="rt-glossary">❓ Glosario (RIR, PR, RPE…)</button></div>
+      <div style="text-align:right; margin-bottom:var(--space-2);"><button type="button" class="btn-sm btn-secondary" id="rt-glossary">❓ Ayuda: ¿qué significa cada término?</button></div>
       <label class="field field-wide"><span>Nombre de la rutina</span>
         <input type="text" id="rt-name" value="${Utils.escapeHtml(draft.name)}" placeholder="Ej. Fuerza 4 días - Ana"></label>
       <label class="field field-wide"><span>Anotaciones (opcional)</span>
         <textarea id="rt-notes" rows="2" placeholder="Notas para esta rutina: progresiones, lesiones a cuidar, etc.">${Utils.escapeHtml(draft.notes || '')}</textarea></label>
-      <label class="field"><span>Unidad del peso objetivo</span>
-        <select id="rt-weight-unit">
-          <option value="kg" ${weightUnit === 'kg' ? 'selected' : ''}>Kilogramos (kg)</option>
-          <option value="lb" ${weightUnit === 'lb' ? 'selected' : ''}>Libras (lb)</option>
-        </select>
-      </label>
+      <div class="field"><span>Unidad de peso de esta rutina</span>${unitSeg(weightUnit)}
+        <small class="text-muted" style="font-weight:400;">Solo cambia esta rutina; no afecta lo elegido en Ajustes.</small></div>
+      ${Volume.panelHtml(draft.days, draft.clientId, volOpen)}
       <div class="rt-days-tabs" id="rt-days-tabs">
         ${draft.days.map((d, i) => `<button type="button" class="rt-day-tab ${i === 0 ? 'active' : ''}" data-i="${i}">${Utils.escapeHtml(d.name)}</button>`).join('')}
         <button type="button" class="rt-day-add" id="rt-day-add">+ Día</button>
@@ -518,18 +532,19 @@ const Routines = (() => {
       <div class="rt-ex-block-top">
         <span class="drag-handle" title="Arrastra para reordenar">⠿⠿</span>
         <h4>${meta ? Utils.escapeHtml(meta.name) : '(ejercicio eliminado)'}${uni ? ' <span class="chip">🔁 Unilateral</span>' : ''}${bwEx ? ' <span class="chip">🧍 Peso corporal</span>' : ''}${timed ? ' <span class="chip">⏱️ Por tiempo</span>' : ''}</h4>
+        ${unitSeg(unit)}
         <button type="button" class="btn-icon-sm rt-ex-remove" data-i="${dayI}" data-j="${exI}" title="Quitar ejercicio">🗑️</button>
       </div>
       <table class="table-compact">
-        <thead><tr><th>Serie</th>${uni ? '<th class="col-side">Lado</th>' : ''}<th>${timed ? 'Tiempo obj. (seg)' : 'Reps obj.'}</th><th>${bwEx ? `Extra obj. (${unit})` : `Peso obj. (${unit})`}</th><th>RIR obj.</th><th></th></tr></thead>
+        <thead><tr><th>Serie</th>${uni ? '<th class="col-side">Lado</th>' : ''}<th>${timed ? 'Tiempo meta (seg)' : 'Reps meta'}</th><th>${bwEx ? `Extra meta (${unit})` : `Peso meta (${unit})`}</th><th>${Help.term('rir', 'Reserva meta')}</th><th></th></tr></thead>
         <tbody>
           ${sets.map((s, k) => `
             <tr data-i="${dayI}" data-j="${exI}" data-k="${k}">
               <td>${k + 1}</td>
               ${uni ? `<td class="col-side">${sideSelect('rt-set-side', `data-i="${dayI}" data-j="${exI}" data-k="${k}"`, sideOf(s))}</td>` : ''}
               <td><input type="${timed ? 'number' : 'text'}" min="${timed ? '0' : ''}" class="rt-set-input" data-f="${timed ? 'time' : 'reps'}" value="${Utils.escapeHtml(String(timed ? s.time ?? '' : s.reps ?? ''))}" placeholder="${timed ? '30' : '8-12'}"></td>
-              <td><input type="number" min="0" step="0.5" class="rt-set-input" data-f="weight" ${bwEx ? 'placeholder="0 = solo peso corporal"' : ''} value="${targetWeightToUnit(s.weight, weightUnit)}"></td>
-              <td><input type="number" min="0" max="10" class="rt-set-input" data-f="rir" value="${s.rir ?? ''}"></td>
+              <td><input type="number" min="0" step="0.5" class="rt-set-input" inputmode="decimal" data-f="weight" ${bwEx ? 'placeholder="0 = solo peso corporal"' : ''} value="${targetWeightToUnit(s.weight, weightUnit)}"></td>
+              <td><input type="number" min="0" max="10" class="rt-set-input" inputmode="numeric" data-f="rir" value="${s.rir ?? ''}"></td>
               <td><button type="button" class="btn-icon-sm rt-set-remove" data-i="${dayI}" data-j="${exI}" data-k="${k}" title="Eliminar serie">✕</button></td>
             </tr>`).join('') || `<tr><td colspan="${uni ? 6 : 5}" class="text-muted">Sin series</td></tr>`}
         </tbody>
@@ -540,12 +555,14 @@ const Routines = (() => {
 
   function wireBuilder(host, draft, paint, builderState) {
     host.querySelector('#rt-glossary').addEventListener('click', () => UI.openGlossary());
+    Volume.wirePanel(host, { clientId: draft.clientId, onToggle: open => { builderState.volOpen = open; }, onChange: () => paint() });
     host.querySelector('#rt-name').addEventListener('input', e => { draft.name = e.target.value; });
     host.querySelector('#rt-notes').addEventListener('input', e => { draft.notes = e.target.value; });
-    host.querySelector('#rt-weight-unit').addEventListener('change', e => {
-      builderState.weightUnit = e.target.value;
+    host.querySelectorAll('.rt-unit-seg .seg-btn').forEach(btn => btn.addEventListener('click', () => {
+      if (builderState.weightUnit === btn.dataset.unit) return;
+      builderState.weightUnit = btn.dataset.unit;
       paint();
-    });
+    }));
 
     host.querySelectorAll('.rt-day-tab').forEach(tab => tab.addEventListener('click', () => {
       host.querySelectorAll('.rt-day-tab').forEach(t => t.classList.remove('active'));
@@ -682,6 +699,67 @@ const Routines = (() => {
     });
   }
 
+  /* ---------------- Temporizador de descanso ----------------
+     Al marcar una serie como hecha (✓) arranca la cuenta atrás. La duración se
+     elige en el registro de entrenamiento y se recuerda en Ajustes (settings.restSeconds). */
+
+  const rest = { end: 0, timer: null, notified: false };
+
+  function restSeconds() { return Number(Storage.get().settings.restSeconds ?? 90) || 0; }
+  function restFmt(s) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+
+  function restClear() {
+    if (rest.timer) clearInterval(rest.timer);
+    rest.timer = null; rest.end = 0; rest.notified = false;
+  }
+
+  function restPaint() {
+    const bar = document.getElementById('rest-bar');
+    if (!bar) { restClear(); return; }          // el registro se cerró: se detiene solo
+    if (!rest.end) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    if (!bar.dataset.wired) {
+      bar.dataset.wired = '1';
+      bar.addEventListener('click', e => {
+        const act = e.target.closest('[data-act]')?.dataset.act;
+        if (!act) return;
+        if (act === 'minus') rest.end = Math.max(Date.now() + 1000, rest.end - 15000);
+        if (act === 'plus') { rest.end = Math.max(rest.end, Date.now()) + 15000; rest.notified = false; }
+        if (act === 'skip') { rest.end = 0; rest.notified = false; }
+        restPaint();
+      });
+    }
+    const left = Math.max(0, Math.ceil((rest.end - Date.now()) / 1000));
+    bar.style.display = '';
+    bar.classList.toggle('is-over', left === 0);
+    bar.innerHTML = left > 0
+      ? `<span>⏱️ Descanso <strong>${restFmt(left)}</strong></span>
+         <div class="rest-bar-actions">
+           <button type="button" class="btn-sm" data-act="minus">−15 s</button>
+           <button type="button" class="btn-sm" data-act="plus">+15 s</button>
+           <button type="button" class="btn-sm" data-act="skip">Saltar</button>
+         </div>`
+      : `<span>✅ <strong>Descanso terminado</strong> — ¡a la siguiente serie!</span>
+         <div class="rest-bar-actions"><button type="button" class="btn-sm" data-act="skip">Cerrar</button></div>`;
+  }
+
+  function restTick() {
+    if (!document.getElementById('rest-bar')) { restClear(); return; }
+    if (rest.end && !rest.notified && Date.now() >= rest.end) {
+      rest.notified = true;
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      Utils.toast('Descanso terminado', 'info');
+    }
+    restPaint();
+  }
+
+  function restStart() {
+    if (!restSeconds()) return;
+    rest.end = Date.now() + restSeconds() * 1000;
+    rest.notified = false;
+    if (!rest.timer) rest.timer = setInterval(restTick, 500);
+    restPaint();
+  }
+
   /* ---------------- Registro de entrenamiento (logger) ---------------- */
 
   function openLogger(routineId, onDone, initial = {}) {
@@ -722,6 +800,7 @@ const Routines = (() => {
     };
 
     const paint = () => {
+      Utils.setUnitOverride(routineUnit(routine));
       host.innerHTML = loggerMarkup(routine, dayIndex, logDraft);
       wireLogger(host, routine, logDraft, (i) => { dayIndex = i; buildDraft(); paint(); }, refreshSummary, () => { buildDraft(logDraft.date); paint(); });
       refreshSummary();
@@ -740,9 +819,11 @@ const Routines = (() => {
       const editingNote = logDraft.id ? ' · ✏️ editando un registro ya guardado de este día' : '';
       const prs = countPRs(logDraft);
       const prNote = prs ? ` · 🏆 <strong>${prs}</strong> récord${prs === 1 ? '' : 's'}` : '';
-      sum.innerHTML = `<strong>${vol} ${Utils.unitLabel()}</strong> volumen total · <strong>${eff}</strong> series efectivas · <strong>${allSets.length}</strong> series registradas${prNote}${editingNote}`;
+      sum.innerHTML = `<strong>${vol} ${Utils.unitLabel()}</strong> ${Help.term('volumen', 'volumen total')} · <strong>${eff}</strong> ${Help.term('efectiva', 'series efectivas')} · <strong>${allSets.length}</strong> series registradas${prNote}${editingNote}`;
     };
 
+    restClear();
+    Utils.setUnitOverride(routineUnit(routine));   // el registro usa la unidad de la rutina
     buildDraft(initial.date);
 
     UI.openModal({
@@ -750,6 +831,7 @@ const Routines = (() => {
       bodyEl: host,
       wide: true,
       confirmLabel: 'Guardar entrenamiento',
+      onClose: () => Utils.setUnitOverride(null),
       onConfirm: () => {
         const cleaned = { ...logDraft, entries: logDraft.entries.map(e => {
           const ex = Exercises.get(e.exerciseId);
@@ -775,6 +857,7 @@ const Routines = (() => {
           Storage.insert('workoutLogs', cleaned);
           Utils.toast('Entrenamiento registrado', 'success');
         }
+        Utils.setUnitOverride(null);   // lo que se redibuje después vuelve a usar la unidad de Ajustes
         onDone && onDone();
       },
       onOpen: paint
@@ -812,14 +895,19 @@ const Routines = (() => {
       <div class="field-inline" style="margin:var(--space-2) 0; justify-content:space-between;">
         <div class="field-inline">
           <label class="field"><span>Fecha</span><input type="date" id="log-date" value="${draft.date}"></label>
-          <label class="field"><span>Duración (min)</span><input type="number" id="log-minutes" value="${draft.minutes}" min="0"></label>
+          <label class="field"><span>Duración (min)</span><input type="number" inputmode="numeric" id="log-minutes" value="${draft.minutes}" min="0"></label>
+          <label class="field"><span>Descanso</span>
+            <select id="log-rest">${[[0, 'Sin temporizador'], [60, '1 min'], [90, '1:30 min'], [120, '2 min'], [180, '3 min']]
+              .map(([v, l]) => `<option value="${v}" ${restSeconds() === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+          <div class="field"><span>Unidad de peso</span>${unitSeg(unit, 'log-unit-seg')}</div>
         </div>
         <div class="field-inline">
-          <button type="button" class="btn-sm btn-secondary" id="log-rir-guide">📏 Guía RIR/RPE</button>
+          <button type="button" class="btn-sm btn-secondary" id="log-rir-guide">📏 Guía de esfuerzo</button>
           <button type="button" class="btn-sm btn-secondary" id="log-glossary">❓ Glosario</button>
         </div>
       </div>
       <div id="log-summary" class="log-summary"></div>
+      <div id="rest-bar" class="rest-bar" style="display:none;"></div>
       ${draft.entries.map((entry, i) => {
         const meta = Exercises.get(entry.exerciseId);
         const uni = !!meta?.unilateral;
@@ -842,14 +930,14 @@ const Routines = (() => {
           ${bwEx ? `<p class="log-prev-info">${timed
             ? 'Puedes anotar un lastre opcional; el resultado principal de este ejercicio se registra por tiempo.'
             : bwKg
-            ? `Peso corporal: <strong>${Utils.toUnit(bwKg)} ${unit}</strong> + el extra que anotes (déjalo vacío si no agregas peso). El volumen y el 1RM usan el peso total.`
-            : 'Registra el peso corporal del cliente en Progreso para que el volumen y el 1RM lo incluyan; mientras tanto solo cuenta el extra.'}</p>` : ''}
+            ? `Peso corporal: <strong>${Utils.toUnit(bwKg)} ${unit}</strong> + el extra que anotes (déjalo vacío si no agregas peso). El volumen y el máximo estimado usan el peso total.`
+            : 'Registra el peso corporal del cliente en Progreso para que el volumen y el máximo estimado lo incluyan; mientras tanto solo cuenta el extra.'}</p>` : ''}
           ${showPrior ? `<p class="log-prev-info">${prior ? lastTimeText(prior, uni, unit, bwEx, timed) : 'Sin sesiones anteriores registradas de este ejercicio.'}</p>` : ''}
           ${hint ? `<p class="log-suggest">💡 Completaste ${hint.top}+ reps en todas las series con ${hint.from} ${unit}. Prueba con ${hint.to} ${unit}.</p>` : ''}
           <table class="table-compact">
             <thead><tr>
-              <th>Serie</th>${uni ? '<th>Lado</th>' : ''}${showPrior ? '<th>Anterior</th>' : ''}
-              <th>${bwEx ? `Extra (${unit})` : `Peso (${unit})`}</th><th>${timed ? 'Tiempo (seg)' : 'Reps'}</th><th>RIR</th><th>RPE</th>${tracks ? '<th>1RM est.</th>' : ''}<th></th>
+              <th>Serie</th>${uni ? '<th>Lado</th>' : ''}${showPrior ? `<th>${Help.term('anterior', 'Anterior')}</th>` : ''}
+              <th>${bwEx ? `Extra (${unit})` : `Peso (${unit})`}</th><th>${timed ? 'Tiempo (seg)' : 'Reps'}</th><th>${Help.term('rir', 'Reserva (RIR)')}</th><th>${Help.term('rpe', 'Esfuerzo (RPE)')}</th>${tracks ? `<th>${Help.term('rm', 'Máx. estimado (1RM)')}</th>` : ''}<th></th>
             </tr></thead>
             <tbody>
               ${entry.sets.map((s, j) => {
@@ -857,18 +945,21 @@ const Routines = (() => {
                 const prevTag = prev && uni ? { izq: 'Izq ', der: 'Der ', ambos: '' }[sideOf(prev)] : '';
                 const prevMetric = prev ? timed ? `${prev.time} s` : `${loadText(prev, bwEx, unit)} × ${prev.reps}` : '—';
                 return `
-                <tr data-i="${i}" data-j="${j}">
-                  <td>${j + 1}</td>
-                  ${uni ? `<td>${sideSelect('log-set-side', `data-i="${i}" data-j="${j}"`, sideOf(s))}</td>` : ''}
-                  ${showPrior ? `<td class="prev-cell">${prev ? `${prevTag}${prevMetric}` : '—'}</td>` : ''}
-                  <td>${bwEx
-                    ? `<input type="number" min="0" step="0.5" class="rt-input" data-f="extra" placeholder="0" value="${Utils.toUnit(s.extra ?? s.weight)}">`
-                    : `<input type="number" min="0" step="0.5" class="rt-input" data-f="weight" value="${Utils.toUnit(s.weight)}">`}</td>
-                  <td><input type="number" min="0" class="rt-input" data-f="${timed ? 'time' : 'reps'}" value="${timed ? s.time ?? '' : s.reps}"></td>
-                  <td><input type="number" min="0" max="10" class="rt-input" data-f="rir" value="${s.rir}"></td>
-                  <td><input type="number" min="1" max="10" class="rt-input" data-f="rpe" value="${s.rpe}"></td>
-                  ${tracks ? `<td class="rm-cell">${rmCellHtml(s, prIdx.has(j))}</td>` : ''}
-                  <td><button type="button" class="btn-icon-sm log-set-remove" data-i="${i}" data-j="${j}" title="Eliminar serie">✕</button></td>
+                <tr data-i="${i}" data-j="${j}" class="${s.done ? 'is-done' : ''}">
+                  <td class="c-serie" data-label="Serie">${j + 1}</td>
+                  ${uni ? `<td class="c-side" data-label="Lado">${sideSelect('log-set-side', `data-i="${i}" data-j="${j}"`, sideOf(s))}</td>` : ''}
+                  ${showPrior ? `<td class="prev-cell c-prev" data-label="Anterior">${prev ? `${prevTag}${prevMetric}` : '—'}</td>` : ''}
+                  <td class="c-weight" data-label="${bwEx ? 'Extra' : 'Peso'} (${unit})">${bwEx
+                    ? `<input type="number" inputmode="decimal" min="0" step="0.5" class="rt-input" data-f="extra" placeholder="0" value="${Utils.toUnit(s.extra ?? s.weight)}">`
+                    : `<input type="number" inputmode="decimal" min="0" step="0.5" class="rt-input" data-f="weight" value="${Utils.toUnit(s.weight)}">`}</td>
+                  <td class="c-reps" data-label="${timed ? 'Tiempo (seg)' : 'Reps'}"><input type="number" inputmode="numeric" min="0" class="rt-input" data-f="${timed ? 'time' : 'reps'}" value="${timed ? s.time ?? '' : s.reps}"></td>
+                  <td class="c-rir" data-label="Reserva (RIR)"><span class="cell-label">${Help.term('rir', 'Reserva (RIR)')}</span><input type="number" inputmode="numeric" min="0" max="10" class="rt-input" data-f="rir" value="${s.rir}"></td>
+                  <td class="c-rpe" data-label="Esfuerzo (RPE)"><span class="cell-label">${Help.term('rpe', 'Esfuerzo (RPE)')}</span><input type="number" inputmode="numeric" min="1" max="10" class="rt-input" data-f="rpe" value="${s.rpe}"></td>
+                  ${tracks ? `<td class="rm-cell c-rm" data-label="Máx. estimado (1RM)"><span class="cell-label">${Help.term('rm', 'Máx. estimado (1RM)')}</span><span class="rm-val">${rmCellHtml(s, prIdx.has(j))}</span></td>` : ''}
+                  <td class="c-actions">
+                    <button type="button" class="log-set-done ${s.done ? 'on' : ''}" data-i="${i}" data-j="${j}" title="Marcar serie hecha" aria-label="Marcar serie ${j + 1} como hecha">✓</button>
+                    <button type="button" class="btn-icon-sm log-set-remove" data-i="${i}" data-j="${j}" title="Eliminar serie" aria-label="Eliminar serie ${j + 1}">✕</button>
+                  </td>
                 </tr>`;
               }).join('') || `<tr><td colspan="${cols}" class="text-muted">Sin series — agrega una abajo</td></tr>`}
             </tbody>
@@ -879,6 +970,12 @@ const Routines = (() => {
   }
 
   function wireLogger(host, routine, draft, onDayChange, refreshSummary, onDateChange) {
+    // Mientras se escribe en esta ventana, los pesos se leen en la unidad de la rutina
+    // (otra ventana abierta encima podría haber cambiado la unidad temporal)
+    if (!host.dataset.unitWired) {
+      host.dataset.unitWired = '1';
+      ['input', 'change', 'click'].forEach(ev => host.addEventListener(ev, () => Utils.setUnitOverride(routineUnit(routine)), true));
+    }
     host.querySelectorAll('.rt-day-tab').forEach(tab => tab.addEventListener('click', () => {
       onDayChange(Number(tab.dataset.i));
     }));
@@ -889,6 +986,20 @@ const Routines = (() => {
     host.querySelector('#log-minutes').addEventListener('input', e => draft.minutes = Number(e.target.value) || '');
     host.querySelector('#log-rir-guide').addEventListener('click', openRirRpeGuide);
     host.querySelector('#log-glossary').addEventListener('click', () => UI.openGlossary());
+    host.querySelector('#log-rest').addEventListener('change', e => {
+      Storage.get().settings.restSeconds = Number(e.target.value) || 0;
+      Storage.save();
+      if (!Number(e.target.value)) { rest.end = 0; }
+      restPaint();
+    });
+    host.querySelectorAll('.log-set-done').forEach(btn => btn.addEventListener('click', () => {
+      const st = draft.entries[btn.dataset.i].sets[btn.dataset.j];
+      st.done = !st.done;
+      btn.classList.toggle('on', st.done);
+      btn.closest('tr').classList.toggle('is-done', st.done);
+      if (st.done) restStart();
+    }));
+    restPaint();
 
     const repaint = () => {
       const activeIdx = [...host.querySelectorAll('.rt-day-tab')].findIndex(t => t.classList.contains('active'));
@@ -897,13 +1008,32 @@ const Routines = (() => {
       refreshSummary();
     };
 
+    host.querySelectorAll('.log-unit-seg .seg-btn').forEach(btn => btn.addEventListener('click', () => {
+      const u = btn.dataset.unit;
+      if (u === Utils.currentUnit()) return;
+      Storage.update('routines', routine.id, { targetWeightUnit: u });   // la rutina recuerda su unidad
+      Utils.setUnitOverride(u);
+      Utils.toast(`Esta rutina ahora usa ${u === 'lb' ? 'libras' : 'kilogramos'}`, 'info');
+      repaint();
+    }));
+
     host.querySelectorAll('.log-add-set').forEach(btn => btn.addEventListener('click', () => {
       const i = Number(btn.dataset.i);
       const ex = Exercises.get(draft.entries[i].exerciseId);
       const lastSide = draft.entries[i].sets.length ? sideOf(draft.entries[i].sets[draft.entries[i].sets.length - 1]) : 'ambos';
       // Para unilaterales, alternar de lado en la nueva serie es lo más común (izq, der, izq, der...)
       const nextSide = (ex?.unilateral && lastSide !== 'ambos') ? (lastSide === 'izq' ? 'der' : 'izq') : 'ambos';
-      draft.entries[i].sets.push(newLogSet({ weight: '', side: nextSide }, ex, draft.clientId, draft.date));
+      const prevSet = draft.entries[i].sets[draft.entries[i].sets.length - 1];
+      const fresh = newLogSet({ weight: '', side: nextSide }, ex, draft.clientId, draft.date);
+      // La nueva serie arranca con el mismo peso que la anterior (solo falta anotar las reps)
+      if (prevSet && !ex?.measureByTime) {
+        if (Exercises.isBodyweight(ex)) {
+          if (prevSet.extra !== '' && prevSet.extra != null) setExtra(fresh, prevSet.extra);
+        } else if (prevSet.weight !== '' && prevSet.weight != null) {
+          fresh.weight = prevSet.weight;
+        }
+      }
+      draft.entries[i].sets.push(fresh);
       repaint();
     }));
 
@@ -960,6 +1090,7 @@ const Routines = (() => {
     const host = document.createElement('div');
 
     const paint = () => {
+      Utils.setUnitOverride(routineUnit(routine));
       const logs = Storage.all('workoutLogs')
         .filter(l => l.clientId === client.id && l.routineId === routineId)
         .sort((a, b) => b.date.localeCompare(a.date));
@@ -972,6 +1103,7 @@ const Routines = (() => {
       bodyEl: host,
       wide: true,
       hideFooter: true,
+      onClose: () => Utils.setUnitOverride(null),
       onOpen: paint
     });
   }
@@ -1019,7 +1151,7 @@ const Routines = (() => {
           <div class="history-ex">
             <strong>${meta ? Utils.escapeHtml(meta.name) : '(ejercicio eliminado)'}${uni ? ' <span class="chip">🔁 Unilateral</span>' : ''}</strong>
             <table class="table-compact">
-              <thead><tr><th>Serie</th>${uni ? '<th>Lado</th>' : ''}<th>${bwEx ? `Extra (${unit})` : `Peso (${unit})`}</th><th>${timed ? 'Tiempo (seg)' : 'Reps'}</th><th>RIR</th><th>RPE</th>${timed ? '' : '<th>1RM est.</th>'}</tr></thead>
+              <thead><tr><th>Serie</th>${uni ? '<th>Lado</th>' : ''}<th>${bwEx ? `Extra (${unit})` : `Peso (${unit})`}</th><th>${timed ? 'Tiempo (seg)' : 'Reps'}</th><th>Reserva (RIR)</th><th>Esfuerzo (RPE)</th>${timed ? '' : '<th>Máx. est. (1RM)</th>'}</tr></thead>
               <tbody>
                 ${e.sets.map((s, i) => `<tr>
                   <td>${i + 1}</td>

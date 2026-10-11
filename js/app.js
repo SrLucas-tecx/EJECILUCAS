@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   Storage.load();
   State.init();
   UI.initModal();
+  Help.init();
 
   // Modo oscuro según lo guardado
   UI.setDarkMode(Storage.get().settings.darkMode);
@@ -62,7 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
   UI.refreshActiveClientBanner();
   UI.switchTab('dashboard');
 
-  if (!Clients.all().length) {
+  // Quien empieza de cero ve la guía de inicio; a los demás solo se les recuerda agregar un cliente
+  const tourOpened = Help.maybeStartTour();
+  if (!tourOpened && !Clients.all().length) {
     Utils.toast('Agrega tu primer cliente para comenzar', 'info');
   }
 });

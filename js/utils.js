@@ -118,7 +118,13 @@ const Utils = (() => {
      convierten para mostrar en pantalla o para leer lo que el usuario
      tecleó, según la preferencia guardada en Ajustes. */
 
+  // Unidad temporal: mientras se arma/registra una rutina se usa la unidad PROPIA de esa rutina,
+  // sin importar lo elegido en Ajustes. null = usar la de Ajustes.
+  let unitOverride = null;
+  function setUnitOverride(unit) { unitOverride = (unit === 'kg' || unit === 'lb') ? unit : null; }
+
   function currentUnit() {
+    if (unitOverride) return unitOverride;
     try { return Storage.get()?.settings?.units || 'kg'; } catch (e) { return 'kg'; }
   }
   function kgToLb(kg) { return kg * 2.20462; }
@@ -187,7 +193,7 @@ const Utils = (() => {
   return {
     uid, toISODate, todayISO, formatDate, monthLabel, monthKey, age, initials, clamp, round,
     estimate1RM, repMaxFromOneRM, setVolume, totalVolume, isEffectiveSet, effectiveSets, density, rirToRpe,
-    currentUnit, kgToLb, lbToKg, toUnit, fromUnit, unitLabel,
+    currentUnit, setUnitOverride, kgToLb, lbToKg, toUnit, fromUnit, unitLabel,
     escapeHtml, debounce, download, exportExcel, toast
   };
 })();

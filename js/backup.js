@@ -13,12 +13,12 @@ const Backup = (() => {
   // deps: secciones a las que hace referencia por id
   const SECTIONS = {
     clients:       { label: 'Clientes',                         kind: 'array',  deps: [] },
-    exercises:     { label: 'Biblioteca de ejercicios',         kind: 'array',  deps: [] },
+    exercises:     { label: 'Biblioteca de ejercicios',         kind: 'array',  deps: ['settings'] },
     routines:      { label: 'Rutinas',                          kind: 'array',  deps: ['clients', 'exercises'] },
     workoutLogs:   { label: 'Entrenamientos registrados',       kind: 'array',  deps: ['clients', 'routines', 'exercises'] },
     nutritionLogs: { label: 'Alimentación',                     kind: 'array',  deps: ['clients'] },
     progressLogs:  { label: 'Progreso (medidas y fotos)',       kind: 'array',  deps: ['clients'] },
-    settings:      { label: 'Ajustes (modo oscuro y unidades)', kind: 'object', deps: [] }
+    settings:      { label: 'Ajustes (apariencia, unidades y músculos)', kind: 'object', deps: [] }
   };
 
   const isObj = v => v !== null && typeof v === 'object' && !Array.isArray(v);

@@ -7,6 +7,12 @@ const Exercises = (() => {
   const EQUIPMENT = ['Peso corporal', 'Mancuernas', 'Barra', 'Máquina', 'Polea', 'Bandas', 'Disco o mancuerna', 'Kettlebell'];
   const DIFFICULTY = { principiante: 'Principiante', intermedio: 'Intermedio', avanzado: 'Avanzado' };
   const DIFFICULTY_ORDER = { principiante: 0, intermedio: 1, avanzado: 2 };
+  const MECHANIC = { compuesto: 'Compuesto', aislamiento: 'Aislamiento' };
+
+  // Tipo del ejercicio; si todavía no lo trae guardado, se deduce (ver Storage.inferMechanic)
+  function mechanicOf(ex) {
+    return ex && MECHANIC[ex.mechanic] ? ex.mechanic : Storage.inferMechanic(ex);
+  }
 
   // Ejercicio de peso corporal: el peso que se anota es un EXTRA opcional (lastre, chaleco, mancuerna...)
   function isBodyweight(ex) { return !!ex && ex.equipment === 'Peso corporal'; }
@@ -33,11 +39,12 @@ const Exercises = (() => {
   }
 
   function muscleBadges(ex) {
-    const primary = ex.muscles.map(m => `<span class="chip chip-accent">${MuscleMap.muscleLabel(m)}</span>`).join('');
-    const secondary = (ex.secondary || []).map(m => `<span class="chip">${MuscleMap.muscleLabel(m)}</span>`).join('');
+    const primary = ex.muscles.map(m => `<span class="chip chip-accent">${Utils.escapeHtml(MuscleMap.muscleLabel(m))}</span>`).join('');
+    const secondary = (ex.secondary || []).map(m => `<span class="chip">${Utils.escapeHtml(MuscleMap.muscleLabel(m))}</span>`).join('');
+    const mech = `<span class="chip">${MECHANIC[mechanicOf(ex)]}</span>`;
     const uni = ex.unilateral ? `<span class="chip">🔁 Unilateral</span>` : '';
     const timed = ex.measureByTime ? '<span class="chip">⏱️ Por tiempo</span>' : '';
-    return primary + secondary + uni + timed;
+    return primary + secondary + mech + uni + timed;
   }
 
   function card(ex, opts = {}) {
@@ -70,7 +77,7 @@ const Exercises = (() => {
           <option value="">Todo el equipo</option>
           ${EQUIPMENT.map(eq => `<option ${filter.equipment === eq ? 'selected' : ''}>${eq}</option>`).join('')}
         </select>
-        ${filter.muscle ? `<button class="filter-chip active" id="ex-clear-muscle">🎯 ${MuscleMap.muscleLabel(filter.muscle)} ✕</button>` : ''}
+        ${filter.muscle ? `<button class="filter-chip active" id="ex-clear-muscle">🎯 ${Utils.escapeHtml(MuscleMap.muscleLabel(filter.muscle))} ✕</button>` : ''}
         <button class="filter-chip" id="ex-toggle-map">🎯 Filtrar por músculo</button>
         ${opts.pickable ? '' : `<button class="btn-primary" id="ex-new" style="margin-left:auto;">+ Nuevo ejercicio</button>`}
       </div>
@@ -111,7 +118,10 @@ const Exercises = (() => {
       panel.style.display = show ? '' : 'none';
       if (show) {
         panel.dataset.built = '1';
-        MuscleMap.renderFieldPicker(panel, {
+        panel.innerHTML = `<div id="ex-picker"></div>${opts.pickable ? '' : '<button type="button" class="btn-sm btn-secondary mgr-open" id="ex-manage-muscles">⚙️ Gestionar músculos</button>'}`;
+        const manage = panel.querySelector('#ex-manage-muscles');
+        if (manage) manage.addEventListener('click', () => MuscleManager.open({ onClose: () => renderLibrary(container, opts) }));
+        MuscleMap.renderFieldPicker(panel.querySelector('#ex-picker'), {
           selected: filter.muscle ? [filter.muscle] : [],
           multi: false,
           onToggle: (id, sel) => {
@@ -145,9 +155,9 @@ const Exercises = (() => {
         ${ex.measureByTime ? `<p class="text-muted" style="font-size:var(--fs-xs);">⏱️ Este ejercicio se registra por duración en segundos.</p>` : ex.trackPR === false ? `<p class="text-muted" style="font-size:var(--fs-xs);">📴 El seguimiento de récords (PR) está desactivado para este ejercicio.</p>` : `
         <h4>📐 Récord (PR)</h4>
         <p class="text-muted" style="font-size:var(--fs-sm);">${best
-          ? `Tu mejor registro con ${Utils.escapeHtml(client.name)}: <strong>${Utils.toUnit(best.weight)} ${Utils.unitLabel()} × ${best.reps}</strong> (1RM est. ${Utils.toUnit(best.rm)} ${Utils.unitLabel()}, ${Utils.formatDate(best.date, { withYear: false })})`
+          ? `Tu mejor registro con ${Utils.escapeHtml(client.name)}: <strong>${Utils.toUnit(best.weight)} ${Utils.unitLabel()} × ${best.reps}</strong> (máximo estimado ${Utils.toUnit(best.rm)} ${Utils.unitLabel()}, ${Utils.formatDate(best.date, { withYear: false })})`
           : (client ? 'Aún no hay entrenamientos registrados de este ejercicio.' : 'Elige un cliente activo para ver su historial.')}</p>
-        <button type="button" class="btn-sm btn-secondary" id="ex-pr-calc">📐 Calcular PR aproximado</button>`}
+        <button type="button" class="btn-sm btn-secondary" id="ex-pr-calc">📐 Calcular récord aproximado</button>`}
       `,
       hideFooter: true,
       onOpen: () => {
@@ -172,13 +182,13 @@ const Exercises = (() => {
       const rows = [1, 2, 3, 5, 8, 10, 12, 15].map(r =>
         `<tr><td>${r} rep${r === 1 ? '' : 's'}</td><td>${oneRM ? Utils.toUnit(Utils.repMaxFromOneRM(oneRM, r)) + ' ' + unit : '—'}</td></tr>`).join('');
       host.innerHTML = `
-        <p class="text-muted" style="font-size:var(--fs-sm);">Pon un peso y cuántas repeticiones hiciste con él (hasta el fallo técnico). Se estima tu 1RM con la fórmula de Epley y de ahí se calculan pesos aproximados para otros rangos de reps.</p>
+        <p class="text-muted" style="font-size:var(--fs-sm);">Pon un peso y cuántas repeticiones hiciste con él (hasta el fallo técnico). Se estima tu máximo (1RM) con la fórmula de Epley y de ahí se calculan pesos aproximados para otros rangos de reps.</p>
         <div class="field-inline">
           <label class="field"><span>Peso (${unit})</span><input type="number" min="0" step="0.5" id="pc-weight" value="${weight}"></label>
           <label class="field"><span>Repeticiones</span><input type="number" min="1" id="pc-reps" value="${reps}"></label>
         </div>
         <p class="text-muted" style="font-size:var(--fs-xs);">Es una estimación matemática, no un test real — sirve para planear, no como sustituto de probar el peso.</p>
-        <h4>1RM estimado: ${oneRM ? Utils.toUnit(oneRM) + ' ' + unit : '—'}</h4>
+        <h4>Máximo estimado (1RM): ${oneRM ? Utils.toUnit(oneRM) + ' ' + unit : '—'}</h4>
         <table class="table-compact">
           <thead><tr><th>Repeticiones</th><th>Peso aproximado</th></tr></thead>
           <tbody>${rows}</tbody>
@@ -188,7 +198,7 @@ const Exercises = (() => {
     };
 
     UI.openModal({
-      title: `📐 PR aproximado — ${ex.name}`,
+      title: `📐 Récord aproximado — ${ex.name}`,
       bodyEl: host,
       hideFooter: true,
       onOpen: paint
@@ -214,6 +224,8 @@ const Exercises = (() => {
           <select id="f-equipment">${EQUIPMENT.map(eq => `<option ${editing?.equipment === eq ? 'selected' : ''}>${eq}</option>`).join('')}</select></label>
         <label class="field"><span>Dificultad</span>
           <select id="f-difficulty">${Object.entries(DIFFICULTY).map(([k, v]) => `<option value="${k}" ${editing?.difficulty === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+        <label class="field"><span>Tipo de ejercicio</span>
+          <select id="f-mechanic">${Object.entries(MECHANIC).map(([k, v]) => `<option value="${k}" ${(editing ? mechanicOf(editing) : 'compuesto') === k ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         <label class="field checkbox-field"><input type="checkbox" id="f-unilateral" ${editing?.unilateral ? 'checked' : ''}><span>Ejercicio unilateral (un lado a la vez)</span></label>
         <label class="field checkbox-field"><input type="checkbox" id="f-measure-time" ${editing?.measureByTime ? 'checked' : ''}><span>Medir este ejercicio por tiempo (segundos) en vez de repeticiones</span></label>
         <label class="field checkbox-field"><input type="checkbox" id="f-trackpr" ${editing?.trackPR === false ? '' : 'checked'}><span>Registrar récords (PR) para este ejercicio</span></label>
@@ -228,6 +240,9 @@ const Exercises = (() => {
         <label class="field field-wide"><span>Consejo del entrenador</span>
           <textarea id="f-tips" rows="2">${editing ? Utils.escapeHtml(editing.tips || '') : ''}</textarea></label>
         <div class="field field-wide">
+          <button type="button" class="btn-sm btn-secondary mgr-open" id="f-manage-muscles">⚙️ Gestionar músculos</button>
+        </div>
+        <div class="field field-wide">
           <span>Músculo principal</span>
           <div id="f-map-primary" class="mf-panel"></div>
         </div>
@@ -237,9 +252,31 @@ const Exercises = (() => {
         </div>
       </div>`;
 
+    // El formulario vive en un elemento propio: así conserva lo escrito al abrir "Gestionar músculos" encima
+    const formHost = document.createElement('div');
+    formHost.innerHTML = body;
+
+    const renderPickers = () => {
+      MuscleMap.renderFieldPicker(document.getElementById('f-map-primary'), {
+        selected: selectedMuscles, multi: true,
+        onToggle: (id, sel) => { selectedMuscles = sel; }
+      });
+      MuscleMap.renderFieldPicker(document.getElementById('f-map-secondary'), {
+        selected: selectedSecondary, multi: true,
+        onToggle: (id, sel) => { selectedSecondary = sel; }
+      });
+    };
+    // Tras gestionar músculos: aplica los reemplazos a lo ya elegido y quita lo que ya no existe
+    const applyRemap = remap => {
+      const ok = new Set(MuscleMap.groups().flatMap(g => g.muscles));
+      const fix = list => [...new Set(list.map(id => (id in remap ? remap[id] : id)).filter(id => id && ok.has(id)))];
+      selectedMuscles = fix(selectedMuscles);
+      selectedSecondary = fix(selectedSecondary);
+    };
+
     UI.openModal({
       title: editing ? 'Editar ejercicio' : 'Nuevo ejercicio',
-      body,
+      bodyEl: formHost,
       confirmLabel: editing ? 'Guardar cambios' : 'Crear ejercicio',
       onConfirm: () => {
         const name = document.getElementById('f-name').value.trim();
@@ -249,6 +286,7 @@ const Exercises = (() => {
           name,
           equipment: document.getElementById('f-equipment').value,
           difficulty: document.getElementById('f-difficulty').value,
+          mechanic: document.getElementById('f-mechanic').value,
           unilateral: document.getElementById('f-unilateral').checked,
           measureByTime: document.getElementById('f-measure-time').checked,
           trackPR: document.getElementById('f-trackpr').checked,
@@ -265,13 +303,9 @@ const Exercises = (() => {
         onDone && onDone();
       },
       onOpen: () => {
-        MuscleMap.renderFieldPicker(document.getElementById('f-map-primary'), {
-          selected: selectedMuscles, multi: true,
-          onToggle: (id, sel) => { selectedMuscles = sel; }
-        });
-        MuscleMap.renderFieldPicker(document.getElementById('f-map-secondary'), {
-          selected: selectedSecondary, multi: true,
-          onToggle: (id, sel) => { selectedSecondary = sel; }
+        renderPickers();
+        document.getElementById('f-manage-muscles').addEventListener('click', () => {
+          MuscleManager.open({ onClose: ({ remap }) => { applyRemap(remap); renderPickers(); } });
         });
         const preview = document.getElementById('f-media-preview');
         const wireRemove = () => {
@@ -302,5 +336,5 @@ const Exercises = (() => {
     });
   }
 
-  return { EQUIPMENT, DIFFICULTY, isBodyweight, all, get, matches, renderLibrary, openTutorial, openModal, deleteExercise, muscleBadges };
+  return { EQUIPMENT, DIFFICULTY, MECHANIC, mechanicOf, isBodyweight, all, get, matches, renderLibrary, openTutorial, openModal, deleteExercise, muscleBadges };
 })();
