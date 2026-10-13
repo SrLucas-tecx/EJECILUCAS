@@ -291,9 +291,39 @@ const Backup = (() => {
   function openImport(json, found, onDone) {
     const db = Storage.get();
     const host = document.createElement('div');
+    const gyms = Gyms.all();
     host.innerHTML = `
       <p class="text-muted">Este archivo trae ${found.length} sección${found.length === 1 ? '' : 'es'}. Elige cuáles aplicar:</p>
       <div class="section-check-list">${sectionChecks(found, db, json)}</div>
+
+      ${found.includes('exercises') ? `
+      <div id="bk-exercise-destination">
+        <h4>¿Dónde guardar los ejercicios?</h4>
+        <div class="mode-options">
+          <label class="section-check"><input type="radio" name="bk-exercise-destination" value="library" checked>
+            <span>Solo en la biblioteca</span></label>
+          <label class="section-check"><input type="radio" name="bk-exercise-destination" value="gym">
+            <span>Solo en un gimnasio <small style="display:block;font-weight:400;">No aparecerán en la biblioteca general.</small></span></label>
+          <label class="section-check"><input type="radio" name="bk-exercise-destination" value="both">
+            <span>En la biblioteca y en un gimnasio</span></label>
+        </div>
+        <div id="bk-exercise-gym-options" style="display:none;">
+          ${gyms.length ? `
+          <label class="field"><span>Gimnasio de destino</span>
+            <select id="bk-exercise-gym">${gyms.map(g => `<option value="${Utils.escapeHtml(g.id)}">${Utils.escapeHtml(g.name)}</option>`).join('')}</select>
+          </label>
+          <label class="section-check" style="margin-top:var(--space-2);">
+            <input type="checkbox" id="bk-create-gym">
+            <span>Crear un gimnasio nuevo</span>
+          </label>` : `
+          <p class="text-muted">Aún no tienes gimnasios. Crea uno para guardar allí los ejercicios.</p>
+          <input type="hidden" id="bk-create-gym" value="on">`}
+          <label class="field" id="bk-new-gym-field" style="display:none;">
+            <span>Nombre del nuevo gimnasio</span>
+            <input type="text" id="bk-new-gym-name" maxlength="60" placeholder="Ej. Gimnasio de casa">
+          </label>
+        </div>
+      </div>` : ''}
 
       <h4>¿Cómo aplicarlas?</h4>
       <div class="mode-options">
@@ -313,6 +343,18 @@ const Backup = (() => {
     const mode = () => host.querySelector('input[name="bk-mode"]:checked').value;
     const refresh = () => {
       const parts = [];
+      const destinationPanel = host.querySelector('#bk-exercise-destination');
+      if (destinationPanel) {
+        const includeExercises = checkedKeys(host).includes('exercises');
+        destinationPanel.style.display = includeExercises ? '' : 'none';
+        const destination = host.querySelector('input[name="bk-exercise-destination"]:checked').value;
+        const gymOptions = host.querySelector('#bk-exercise-gym-options');
+        gymOptions.style.display = includeExercises && destination !== 'library' ? '' : 'none';
+        const createGym = host.querySelector('#bk-create-gym');
+        const createGymChecked = createGym.type === 'hidden' || createGym.checked;
+        host.querySelector('#bk-new-gym-field').style.display =
+          includeExercises && destination !== 'library' && createGymChecked ? '' : 'none';
+      }
       const deps = depsHtml(checkedKeys(host), 'import');
       if (deps) parts.push(deps);
       if (mode() === 'replace') parts.push('🗑️ <strong>Reemplazar</strong> borra lo que tengas ahora en las secciones marcadas.');
@@ -328,6 +370,7 @@ const Backup = (() => {
       if (btn) btn.textContent = mode() === 'replace' ? 'Reemplazar datos' : 'Importar';
     };
     host.addEventListener('change', refresh);
+    host.addEventListener('input', refresh);
 
     UI.openModal({
       title: '📥 Importar datos',
@@ -337,11 +380,28 @@ const Backup = (() => {
       onConfirm: () => {
         const keys = checkedKeys(host);
         if (!keys.length) { Utils.toast('Elige al menos una sección', 'danger'); return false; }
+        let exerciseDestination = null;
+        if (keys.includes('exercises') && host.querySelector('#bk-exercise-destination')) {
+          const type = host.querySelector('input[name="bk-exercise-destination"]:checked').value;
+          exerciseDestination = { type };
+          if (type !== 'library') {
+            const createGym = host.querySelector('#bk-create-gym');
+            if (createGym.type === 'hidden' || createGym.checked) {
+              exerciseDestination.createGymName = host.querySelector('#bk-new-gym-name').value.trim();
+              if (!exerciseDestination.createGymName) {
+                Utils.toast('Escribe el nombre del gimnasio nuevo', 'danger');
+                return false;
+              }
+            } else {
+              exerciseDestination.gymId = host.querySelector('#bk-exercise-gym').value;
+            }
+          }
+        }
         if (host.querySelector('#bk-safety').checked) {
           Utils.download(`ejercilucas-antes-de-importar-${Utils.todayISO()}.json`, Storage.exportJSON());
         }
         let report;
-        try { report = applyImport(json, keys, mode()); }
+        try { report = applyImport(json, keys, mode(), exerciseDestination); }
         catch (err) { console.error(err); Utils.toast(err.message || 'No se pudo importar', 'danger'); return false; }
 
         const notes = [];
@@ -357,8 +417,9 @@ const Backup = (() => {
    * Aplica las secciones elegidas sobre los datos actuales.
    * Trabaja sobre una COPIA, valida todo el conjunto y solo entonces guarda.
    */
-  function applyImport(json, keys, mode /* 'merge' | 'replace' */) {
+  function applyImport(json, keys, mode /* 'merge' | 'replace' */, exerciseDestination = null) {
     const next = clone(Storage.get());
+    const importedExerciseIds = new Set();
 
     // 1) Los ejercicios semilla se crean con ids aleatorios en cada instalación, así que
     //    el mismo "Press de banca" tiene ids distintos en cada navegador. Emparejamos por
@@ -388,13 +449,23 @@ const Backup = (() => {
         next[k] = mode === 'replace' ? { ...incoming } : { ...next[k], ...incoming };
         return;
       }
-      if (mode === 'replace') { next[k] = incoming; return; }
+      if (mode === 'replace') {
+        next[k] = k === 'exercises'
+          ? incoming.filter(isObj).map(x => ({ ...x, id: x.id || Utils.uid('exe') }))
+          : incoming;
+        if (k === 'exercises') next[k].forEach(x => importedExerciseIds.add(idMap[x.id] || x.id));
+        return;
+      }
 
       const photoFields = Photos.FIELDS[k] || [];
       const map = new Map(next[k].map(x => [x.id, x]));
       incoming.filter(isObj).forEach(x => {
-        if (k === 'exercises' && idMap[x.id]) return;   // ya existe uno con ese nombre
+        if (k === 'exercises' && idMap[x.id]) {
+          importedExerciseIds.add(idMap[x.id]);
+          return;                                       // ya existe uno con ese nombre
+        }
         const id = x.id || Utils.uid(k.slice(0, 3));
+        if (k === 'exercises') importedExerciseIds.add(idMap[id] || id);
         const old = map.get(id);
         const rec = { ...x, id };
         // si el archivo viene sin fotos, no pisar las que ya tienes
@@ -403,6 +474,35 @@ const Backup = (() => {
       });
       next[k] = [...map.values()];
     });
+
+    if (exerciseDestination && keys.includes('exercises')) {
+      if (!['library', 'gym', 'both'].includes(exerciseDestination.type)) {
+        throw new Error('El destino de los ejercicios no es válido');
+      }
+
+      let targetGymId = exerciseDestination.gymId || null;
+      if (exerciseDestination.type !== 'library' && exerciseDestination.createGymName) {
+        const name = exerciseDestination.createGymName.trim();
+        if (!name) throw new Error('Escribe el nombre del gimnasio nuevo');
+        if (next.gyms.some(g => norm(g.name) === norm(name))) {
+          throw new Error(`Ya existe un gimnasio llamado "${name}"`);
+        }
+        targetGymId = Utils.uid('gym');
+        next.gyms.push({ id: targetGymId, name, notes: '', exerciseIds: [] });
+      }
+      if (exerciseDestination.type !== 'library' && !next.gyms.some(g => g.id === targetGymId)) {
+        throw new Error('Elige un gimnasio existente o crea uno nuevo');
+      }
+
+      next.exercises = next.exercises.map(ex => importedExerciseIds.has(ex.id)
+        ? { ...ex, libraryVisible: exerciseDestination.type !== 'gym' }
+        : ex);
+      next.gyms = next.gyms.map(g => {
+        const exerciseIds = (g.exerciseIds || []).filter(id => !importedExerciseIds.has(id));
+        if (g.id === targetGymId) exerciseIds.push(...importedExerciseIds);
+        return { ...g, exerciseIds: [...new Set(exerciseIds)] };
+      });
+    }
 
     // 3) Validar TODO el conjunto antes de guardar
     const { data, dropped } = normalize(next);

@@ -101,7 +101,8 @@ const Exercises = (() => {
 
     const grid = container.querySelector('#ex-grid');
     const paintGrid = () => {
-      const list = sorted(all().filter(ex => matches(ex, State.s.exerciseFilter)));
+      const list = sorted(all().filter(ex =>
+        (filter.gymId || ex.libraryVisible !== false) && matches(ex, State.s.exerciseFilter)));
       grid.innerHTML = list.length ? list.map(ex => card(ex, opts)).join('')
         : `<div class="empty-state"><span class="empty-icon">🔍</span><h3>Sin resultados</h3><p>${State.s.exerciseFilter.gymId ? 'Este gimnasio no tiene ejercicios que coincidan. Agrega los que tenga con el botón de arriba.' : 'Ajusta los filtros o crea un ejercicio nuevo.'}</p></div>`;
 

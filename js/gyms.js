@@ -139,7 +139,15 @@ const Gyms = (() => {
   function deleteGym(id, done) {
     const g = get(id);
     if (!g) return;
-    UI.confirm(`¿Eliminar el gimnasio "${esc(g.name)}"? Los ejercicios no se borran de la biblioteca, solo dejan de estar asignados a él.`, () => {
+    UI.confirm(`¿Estás seguro de que quieres eliminar el gimnasio "${esc(g.name)}"? Los ejercicios no se borran; solo dejan de estar asignados a él.`, () => {
+      exerciseIds(g).forEach(exId => {
+        const exercise = Exercises.get(exId);
+        const assignedElsewhere = all().some(other =>
+          other.id !== id && (other.exerciseIds || []).includes(exId));
+        if (exercise && exercise.libraryVisible === false && !assignedElsewhere) {
+          Storage.update('exercises', exId, { libraryVisible: true });
+        }
+      });
       Storage.remove('gyms', id);
       Utils.toast('Gimnasio eliminado', 'info');
       done && done();
