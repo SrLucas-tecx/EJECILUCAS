@@ -510,3 +510,14 @@ input.switch:checked::after{ transform:translateX(20px); }
 @media (max-width: 560px){
   .rt-ex-meta{ grid-template-columns:1fr; }
 }
+
+
+/* ==========================================================================
+   GIMNASIOS — ejercicios y máquinas por gimnasio
+   ========================================================================== */
+.gym-pick-actions{ display:flex; align-items:center; gap:var(--space-2); flex-wrap:wrap; margin-bottom:var(--space-2); }
+.gym-pick-actions .gym-count{ margin-left:auto; font-size:var(--fs-xs); font-weight:600; color:var(--color-text-muted); }
+.gym-pick-list{ display:flex; flex-direction:column; gap:6px; }
+.gym-pick-row .gym-meta{ display:block; font-weight:400; font-size:var(--fs-xs); color:var(--color-text-muted); }
+.gym-notes{ font-size:var(--fs-xs); margin:0 0 var(--space-2); }
+.gym-search{ width:100%; margin-bottom:var(--space-3); }

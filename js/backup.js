@@ -16,6 +16,7 @@ const Backup = (() => {
     exercises:     { label: 'Biblioteca de ejercicios',         kind: 'array',  deps: ['settings'] },
     routines:      { label: 'Rutinas',                          kind: 'array',  deps: ['clients', 'exercises'] },
     routineTemplates: { label: 'Plantillas de rutina',          kind: 'array',  deps: ['exercises'] },
+    gyms:          { label: 'Gimnasios',                        kind: 'array',  deps: ['exercises'] },
     workoutLogs:   { label: 'Entrenamientos registrados',       kind: 'array',  deps: ['clients', 'routines', 'exercises'] },
     nutritionLogs: { label: 'Alimentación',                     kind: 'array',  deps: ['clients'] },
     progressLogs:  { label: 'Progreso (medidas y fotos)',       kind: 'array',  deps: ['clients'] },
@@ -36,6 +37,7 @@ const Backup = (() => {
     exercises:     r => typeof r.name === 'string' && Array.isArray(r.muscles),
     routines:      r => Array.isArray(r.days) && r.days.every(d => isObj(d) && Array.isArray(d.exercises)),
     routineTemplates: r => typeof r.name === 'string' && Array.isArray(r.days) && r.days.every(d => isObj(d) && Array.isArray(d.exercises)),
+    gyms:          r => typeof r.name === 'string' && Array.isArray(r.exerciseIds),
     workoutLogs:   r => typeof r.date === 'string' && Array.isArray(r.entries) && r.entries.every(e => isObj(e) && Array.isArray(e.sets)),
     nutritionLogs: r => typeof r.date === 'string' && Array.isArray(r.meals) && r.meals.every(m => isObj(m) && Array.isArray(m.items)),
     progressLogs:  r => typeof r.date === 'string'
@@ -376,6 +378,7 @@ const Backup = (() => {
       (json.routines || []).forEach(r => (r.days || []).forEach(d => (d.exercises || []).forEach(e => { e.exerciseId = remap(e.exerciseId); })));
       (json.routineTemplates || []).forEach(r => (r.days || []).forEach(d => (d.exercises || []).forEach(e => { e.exerciseId = remap(e.exerciseId); })));
       (json.workoutLogs || []).forEach(l => (l.entries || []).forEach(e => { e.exerciseId = remap(e.exerciseId); }));
+      (json.gyms || []).forEach(g => { if (Array.isArray(g.exerciseIds)) g.exerciseIds = g.exerciseIds.map(remap); });
     }
 
     // 2) Aplicar cada sección elegida

@@ -17,6 +17,7 @@ const Storage = (() => {
     exercises: [],
     routines: [],
     routineTemplates: [],      // plantillas de rutina guardadas por el usuario
+    gyms: [],                  // gimnasios: { id, name, notes, exerciseIds: [] }
     workoutLogs: [],
     nutritionLogs: [],
     progressLogs: []

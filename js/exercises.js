@@ -31,10 +31,11 @@ const Exercises = (() => {
   function isGif(url = '') { return /\.gif($|\?)/i.test(url); }
 
   function matches(ex, filter) {
-    const { muscle, equipment, search } = filter;
+    const { muscle, equipment, search, gymId } = filter;
     if (muscle && !ex.muscles.includes(muscle) && !(ex.secondary || []).includes(muscle)) return false;
     if (equipment && ex.equipment !== equipment) return false;
     if (search && !ex.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (gymId && !Gyms.hasExercise(gymId, ex.id)) return false;
     return true;
   }
 
@@ -47,6 +48,12 @@ const Exercises = (() => {
     return primary + secondary + mech + uni + timed;
   }
 
+  // Gimnasios donde está disponible este ejercicio
+  function gymLine(ex) {
+    const gs = Gyms.gymsOf(ex.id);
+    return gs.length ? `<p class="text-muted exercise-equipment">🏢 ${gs.map(g => Utils.escapeHtml(g.name)).join(' · ')}</p>` : '';
+  }
+
   function card(ex, opts = {}) {
     return `
     <article class="exercise-card" data-id="${ex.id}">
@@ -57,6 +64,7 @@ const Exercises = (() => {
       </div>
       <div class="chip-row">${muscleBadges(ex)}</div>
       <p class="text-muted exercise-equipment">🏋️ ${Utils.escapeHtml(ex.equipment || 'Sin equipo')}</p>
+      ${gymLine(ex)}
       <div class="exercise-card-actions">
         <button class="btn-sm btn-secondary" data-act="tutorial">📖 Tutorial</button>
         ${opts.pickable ? `<button class="btn-sm btn-primary" data-act="pick">+ Agregar a rutina</button>` : `
@@ -69,6 +77,7 @@ const Exercises = (() => {
   function renderLibrary(container, opts = {}) {
     if (!container) return;
     const filter = State.s.exerciseFilter;
+    if (filter.gymId && !Gyms.get(filter.gymId)) filter.gymId = null;   // el gimnasio ya no existe
 
     container.innerHTML = `
       <div class="filter-bar">
@@ -77,8 +86,14 @@ const Exercises = (() => {
           <option value="">Todo el equipo</option>
           ${EQUIPMENT.map(eq => `<option ${filter.equipment === eq ? 'selected' : ''}>${eq}</option>`).join('')}
         </select>
+        ${Gyms.all().length ? `<select id="ex-gym" class="filter-select" aria-label="Gimnasio">
+          <option value="">Todos los gimnasios</option>
+          ${Gyms.all().map(g => `<option value="${g.id}" ${filter.gymId === g.id ? 'selected' : ''}>🏢 ${Utils.escapeHtml(g.name)}</option>`).join('')}
+        </select>` : ''}
         ${filter.muscle ? `<button class="filter-chip active" id="ex-clear-muscle">🎯 ${Utils.escapeHtml(MuscleMap.muscleLabel(filter.muscle))} ✕</button>` : ''}
         <button class="filter-chip" id="ex-toggle-map">🎯 Filtrar por músculo</button>
+        ${opts.pickable ? '' : '<button class="filter-chip" id="ex-gyms">🏢 Gimnasios</button>'}
+        ${filter.gymId && !opts.pickable ? '<button class="filter-chip active" id="ex-gym-add">➕ Agregar ejercicios a este gimnasio</button>' : ''}
         ${opts.pickable ? '' : `<button class="btn-primary" id="ex-new" style="margin-left:auto;">+ Nuevo ejercicio</button>`}
       </div>
       <div class="mf-filter-panel" id="ex-map-panel" style="display:none;"></div>
@@ -88,7 +103,7 @@ const Exercises = (() => {
     const paintGrid = () => {
       const list = sorted(all().filter(ex => matches(ex, State.s.exerciseFilter)));
       grid.innerHTML = list.length ? list.map(ex => card(ex, opts)).join('')
-        : `<div class="empty-state"><span class="empty-icon">🔍</span><h3>Sin resultados</h3><p>Ajusta los filtros o crea un ejercicio nuevo.</p></div>`;
+        : `<div class="empty-state"><span class="empty-icon">🔍</span><h3>Sin resultados</h3><p>${State.s.exerciseFilter.gymId ? 'Este gimnasio no tiene ejercicios que coincidan. Agrega los que tenga con el botón de arriba.' : 'Ajusta los filtros o crea un ejercicio nuevo.'}</p></div>`;
 
       grid.querySelectorAll('.exercise-card').forEach(elCard => {
         const id = elCard.dataset.id;
@@ -108,6 +123,12 @@ const Exercises = (() => {
     container.querySelector('#ex-equipment').addEventListener('change', e => {
       State.s.exerciseFilter.equipment = e.target.value; paintGrid();
     });
+    const gymSel = container.querySelector('#ex-gym');
+    if (gymSel) gymSel.addEventListener('change', e => { State.s.exerciseFilter.gymId = e.target.value || null; renderLibrary(container, opts); });
+    const gymsBtn = container.querySelector('#ex-gyms');
+    if (gymsBtn) gymsBtn.addEventListener('click', () => Gyms.openManager({ onClose: () => renderLibrary(container, opts) }));
+    const gymAdd = container.querySelector('#ex-gym-add');
+    if (gymAdd) gymAdd.addEventListener('click', () => Gyms.openPicker(filter.gymId, () => renderLibrary(container, opts)));
     const clearBtn = container.querySelector('#ex-clear-muscle');
     if (clearBtn) clearBtn.addEventListener('click', () => {
       State.s.exerciseFilter.muscle = null; renderLibrary(container, opts);
@@ -210,11 +231,14 @@ const Exercises = (() => {
     return m ? `https://www.youtube.com/embed/${m[1]}` : url;
   }
 
-  function openModal(id, onDone) {
+  // opts.gymId: al crear un ejercicio desde un gimnasio, ese gimnasio ya aparece marcado
+  function openModal(id, onDone, opts = {}) {
     const editing = id ? get(id) : null;
     let selectedMuscles = editing ? [...editing.muscles] : [];
     let selectedSecondary = editing ? [...(editing.secondary || [])] : [];
     let mediaData = editing?.media || '';
+    const gymList = Gyms.all();
+    const gymField = gymList.length ? `<div class="field field-wide"><span>🏢 Disponible en estos gimnasios (opcional)</span>${gymList.map(g => `<label class="field checkbox-field"><input type="checkbox" class="f-gym" value="${g.id}" ${(editing ? Gyms.hasExercise(g.id, editing.id) : opts.gymId === g.id) ? 'checked' : ''}><span>${Utils.escapeHtml(g.name)}</span></label>`).join('')}</div>` : '';
 
     const body = `
       <div class="form-grid">
@@ -239,6 +263,7 @@ const Exercises = (() => {
           <textarea id="f-desc" rows="3">${editing ? Utils.escapeHtml(editing.description || '') : ''}</textarea></label>
         <label class="field field-wide"><span>Consejo del entrenador</span>
           <textarea id="f-tips" rows="2">${editing ? Utils.escapeHtml(editing.tips || '') : ''}</textarea></label>
+        ${gymField}
         <div class="field field-wide">
           <button type="button" class="btn-sm btn-secondary mgr-open" id="f-manage-muscles">⚙️ Gestionar músculos</button>
         </div>
@@ -298,9 +323,11 @@ const Exercises = (() => {
           secondary: selectedSecondary,
           custom: true
         };
-        if (editing) { Storage.update('exercises', editing.id, data); Utils.toast('Ejercicio actualizado', 'success'); }
-        else { Storage.insert('exercises', data); Utils.toast('Ejercicio creado', 'success'); }
-        onDone && onDone();
+        let saved;
+        if (editing) { saved = Storage.update('exercises', editing.id, data); Utils.toast('Ejercicio actualizado', 'success'); }
+        else { saved = Storage.insert('exercises', data); Utils.toast('Ejercicio creado', 'success'); }
+        if (gymList.length) Gyms.setForExercise(saved.id, [...document.querySelectorAll('.f-gym:checked')].map(i => i.value));
+        onDone && onDone(saved);
       },
       onOpen: () => {
         renderPickers();
@@ -331,6 +358,7 @@ const Exercises = (() => {
   function deleteExercise(id, cb) {
     UI.confirm('¿Eliminar este ejercicio de la biblioteca? Las rutinas que ya lo incluyan mostrarán "(ejercicio eliminado)".', () => {
       Storage.remove('exercises', id);
+      Gyms.removeExerciseEverywhere(id);
       Utils.toast('Ejercicio eliminado', 'info');
       cb && cb();
     });
